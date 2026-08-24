@@ -1,0 +1,143 @@
+[
+  {
+    "function": {
+      "description": "Send a message to a card or chat thread",
+      "name": "club_send_message",
+      "parameters": {
+        "properties": {
+          "card_id": {
+            "description": "Card ID to send the message to",
+            "type": "string"
+          },
+          "content": {
+            "description": "Message content in markdown format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "content"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Add message reaction",
+      "name": "club_add_message_reaction",
+      "parameters": {
+        "properties": {
+          "card_id": {
+            "description": "Card id",
+            "type": "string"
+          },
+          "message_id": {
+            "description": "Id of message",
+            "type": "string"
+          },
+          "reaction": {
+            "description": "UTF-8 emoji symbol as reaction for example 👍",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "message_id",
+          "reaction"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Add message attachement. You can attach to message that was sent by you ONLY",
+      "name": "club_add_message_attachement",
+      "parameters": {
+        "properties": {
+          "card_id": {
+            "description": "Card id",
+            "type": "string"
+          },
+          "message_id": {
+            "description": "Id of message, can be take from `send_message` tool result",
+            "type": "string"
+          },
+          "attachement_name": {
+            "description": "Attachement name, can be file name or any other name",
+            "type": "string"
+          },
+          "attachement_data": {
+            "description": "Attachement data, can be a path fo file in local filesystem or a base64 encoded content in form of `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIA...`",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "message_id",
+          "attachement_name",
+          "attachement_data"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Return credits (USD) usage LLM stats for the current account. BYOK is bring your own provider keys",
+      "name": "club_usage_stats",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Get class info from Club platform",
+      "name": "club_get_class_attributes"
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Get an object from Club platform",
+      "name": "club_get_object"
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Find an object from Club platform",
+      "name": "club_find_object_by_attribute"
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Search for text on Club platform",
+      "name": "club_search_text"
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Find messages attached to card:class:Card objects on Club platform, also can be used to find messages in chat threads",
+      "name": "club_find_card_messages"
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Read raw data blobs from club platform (uploaded files, images, etc.)",
+      "name": "club_read_blob"
+    },
+    "type": "function"
+  }
+]

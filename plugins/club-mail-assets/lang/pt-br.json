@@ -1,0 +1,20 @@
+{
+  "string": {
+    "IntegrationLabel": "club Mail",
+    "IntegrationDescription": "Conecte sua caixa de entrada club para enviar, receber e gerenciar e-mails",
+    "Connect": "Conectar",
+    "ConnectClubMail": "Conectar caixa de entrada club",
+    "Cancel": "Cancelar",
+    "Email": "E-mail",
+    "Status": "Status",
+    "FailedToConnect": "O serviço de e-mail club não está disponível",
+    "TotalMessages": "Total de mensagens:",
+    "Configure": "Configurar club Mail",
+    "ChannelSpace": "Espaço para canal de mensagens",
+    "PersonSpaceInfo": "O e-mail estará disponível apenas para você",
+    "SharedSpaceInfo": "O e-mail estará disponível para todos os participantes do espaço",
+    "Mailbox": "Caixa de entrada",
+    "MailboxesNotConfigured": "Nenhuma caixa de entrada encontrada",
+    "ConfigureMailBoxes": "Por favor, adicione uma caixa de entrada na seção de Caixas de entrada para começar"
+  }
+}

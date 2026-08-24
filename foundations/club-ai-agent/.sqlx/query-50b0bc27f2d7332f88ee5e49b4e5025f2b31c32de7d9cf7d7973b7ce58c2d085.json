@@ -1,0 +1,92 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM tasks WHERE state = ? OR state = ? ORDER BY updated_at",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "content",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "social_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "person_name",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 7,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "person_id",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_title",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "message_id",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "complexity",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "state",
+        "ordinal": 12,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "50b0bc27f2d7332f88ee5e49b4e5025f2b31c32de7d9cf7d7973b7ce58c2d085"
+}

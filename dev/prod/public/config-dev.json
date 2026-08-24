@@ -1,0 +1,20 @@
+{
+  "ACCOUNTS_URL":"https://account.club.opensrcs.org",
+  "UPLOAD_URL":"/files",
+  "MODEL_VERSION": null,
+  "TELEGRAM_URL": "https://telegram.club.opensrcs.org",
+  "GMAIL_URL": "https://gmail.club.opensrcs.org",
+  "CALENDAR_URL": "https://calendar.club.opensrcs.org",
+  "REKONI_URL": "https://rekoni.club.opensrcs.org",
+  "COLLABORATOR_URL": "wss://collaborator.club.opensrcs.org",
+  "STATS_URL": "https://stats.club.opensrcs.org",
+  "PRESENCE_URL": "wss://presence.club.opensrcs.org",
+  "PUBLIC_SCHEDULE_URL": "https://schedule.club.opensrcs.org",
+  "CALDAV_SERVER_URL": "https://caldav.club.opensrcs.org",
+  "BACKUP_URL": "https://front.club.opensrcs.org/api/backup",
+  "DATALAKE_URL": "https://datalake.club.opensrcs.org",
+  "CLUBLAKE_URL": "https://lake.club.opensrcs.org",
+  "PULSE_URL": "wss://pulse.club.opensrcs.org/ws",
+  "COMMUNICATION_API_ENABLED": "true",
+  "FILES_URL": "https://datalake.club.opensrcs.org/blob/:workspace/:blobId/:filename"
+}

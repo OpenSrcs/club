@@ -1,0 +1,12 @@
+bind_port = 8094
+bind_host = "0.0.0.0"
+
+token_secret = "secret"
+
+db_connection = "postgresql://root@club.local:26257/defaultdb?sslmode=disable"
+db_scheme = "clubkvs"
+
+payload_size_limit = "2mb"
+
+default_workspace_uuid = "11111111-2222-3333-4444-555555555555"
+

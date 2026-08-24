@@ -1,0 +1,43 @@
+<!-- Copyright © 2026 OpenSrcs. -->
+<!-- -->
+<!-- Licensed under the Eclipse Public License, Version 2.0 (the "License"); -->
+<!-- you may not use this file except in compliance with the License. You may -->
+<!-- obtain a copy of the License at https://www.eclipse.org/legal/epl-2.0 -->
+<!-- -->
+<!-- Unless required by applicable law or agreed to in writing, software -->
+<!-- distributed under the License is distributed on an "AS IS" BASIS, -->
+<!-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. -->
+<!-- -->
+<!-- See the License for the specific language governing permissions and -->
+<!-- limitations under the License. -->
+
+<script lang="ts">
+  import { Attachment } from '@opensrcs/communication-types'
+  import { Label } from '@opensrcs/ui'
+  import { isAppletAttachment, isBlobAttachment } from '@opensrcs/communication-shared'
+  import { getResource } from '@opensrcs/club'
+  import { getClient } from '@opensrcs/presentation'
+  import communication from '@opensrcs/communication'
+
+  export let attachment: Attachment
+  export let lower: boolean = false
+
+  const client = getClient()
+  const applets = client.getModel().findAllSync(communication.class.Applet, {})
+</script>
+
+{#if isBlobAttachment(attachment)}
+  {attachment.params.fileName}
+{/if}
+
+{#if isAppletAttachment(attachment)}
+  {@const applet = applets.find((it) => it.type === attachment.mimeType)}
+  {#if applet}
+    <span class:lower>
+      <Label label={applet.label} />:
+    </span>
+    {#await getResource(applet.getTitleFn) then fn}
+      {fn(attachment)}
+    {/await}
+  {/if}
+{/if}

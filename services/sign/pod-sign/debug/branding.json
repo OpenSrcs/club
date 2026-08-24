@@ -1,0 +1,18 @@
+{
+  "club.local:8080": {
+    "title": "club",
+    "language": "en"
+  },
+  "club.local:8087": {
+    "title": "club",
+    "language": "en"
+  },
+  "club.local:8081": {
+    "title": "TraceX",
+    "language": "en"
+  },
+  "club.local:8088": {
+    "title": "TraceX",
+    "language": "en"
+  }
+}

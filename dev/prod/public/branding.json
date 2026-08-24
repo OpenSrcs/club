@@ -1,0 +1,60 @@
+{
+  "club.local:8080": {
+    "title": "club",
+    "languages": "en,ru,pl,pt,pt-br,es,zh,fr,de,ja,ko,tr",
+    "defaultLanguage": "en",
+    "defaultApplication": "tracker",
+    "defaultSpace": "tracker:project:DefaultProject",
+    "lastNameFirst": "true",
+    "defaultSpecial": "issues",
+    "links": [
+      {
+        "rel": "manifest",
+        "href": "/club/site.webmanifest"
+      },
+      {
+        "rel": "icon",
+        "href": "/club/favicon.svg",
+        "type": "image/svg+xml"
+      },
+      {
+        "rel": "shortcut icon",
+        "href": "/club/favicon.ico",
+        "sizes": "any"
+      },
+      {
+        "rel": "apple-touch-icon",
+        "href": "/club/apple-touch-icon.png"
+      }
+    ]
+  },
+  "club.local:8087": {
+    "title": "club",
+    "languages": "en,ru,pl,pt,pt-br,es,zh,fr,de,ja,ko,tr",
+    "defaultLanguage": "en",
+    "defaultApplication": "tracker",
+    "defaultSpace": "tracker:project:DefaultProject",
+    "defaultSpecial": "issues",
+    "lastNameFirst": "true",
+    "links": [
+      {
+        "rel": "manifest",
+        "href": "/club/site.webmanifest"
+      },
+      {
+        "rel": "icon",
+        "href": "/club/favicon.svg",
+        "type": "image/svg+xml"
+      },
+      {
+        "rel": "shortcut icon",
+        "href": "/club/favicon.ico",
+        "sizes": "any"
+      },
+      {
+        "rel": "apple-touch-icon",
+        "href": "/club/apple-touch-icon.png"
+      }
+    ]
+  }
+}

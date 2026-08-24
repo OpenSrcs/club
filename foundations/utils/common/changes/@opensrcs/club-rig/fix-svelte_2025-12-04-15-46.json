@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/club-rig",
+      "comment": "Ignore svelte preprocess warnings",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@opensrcs/club-rig"
+}

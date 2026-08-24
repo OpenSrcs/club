@@ -1,0 +1,29 @@
+{
+  "club.local:8080": {
+    "key": "club-dev",
+    "title": "club",
+    "protocol": "http",
+    "language": "en",
+    "lastNameFirst": "true"
+  },
+  "club.local:8087": {
+    "key": "club",
+    "title": "club",
+    "protocol": "http",
+    "language": "en",
+    "lastNameFirst": "true"
+  },
+  "host.docker.internal:8087": {
+    "key": "club-docker",
+    "title": "club",
+    "protocol": "http",
+    "language": "en",
+    "lastNameFirst": "true"
+  },
+  "example.localhost": {
+    "key": "example",
+    "title": "Example",
+    "language": "en",
+    "initWorkspace": "init"
+  }
+}

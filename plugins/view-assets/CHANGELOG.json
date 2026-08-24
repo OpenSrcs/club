@@ -1,0 +1,17 @@
+{
+  "name": "@opensrcs/view-assets",
+  "entries": [
+    {
+      "version": "0.7.0",
+      "tag": "@opensrcs/view-assets_v0.6.0",
+      "date": "Sun, 08 Aug 2021 10:14:57 GMT",
+      "comments": {
+        "dependency": [
+          {
+            "comment": "Updating dependency \"@opensrcs/club\" from `~0.6.3` to `~0.6.4`"
+          }
+        ]
+      }
+    }
+  ]
+}

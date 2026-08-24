@@ -1,0 +1,98 @@
+//
+// Copyright © 2026 OpenSrcs.
+//
+// Licensed under the Eclipse Public License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License. You may
+// obtain a copy of the License at https://www.eclipse.org/legal/epl-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import { Mixin, type Builder } from '@opensrcs/model'
+
+import core, { type Tx } from '@opensrcs/core'
+import { TClass } from '@opensrcs/model-core'
+import { type Resource } from '@opensrcs/club'
+import serverCore, { type TriggerControl } from '@opensrcs/server-core'
+import tracker from '@opensrcs/tracker'
+import serverTime, { type ToDoFactory, type OnToDo } from '@opensrcs/server-time'
+import time, { type ToDo, type WorkSlot } from '@opensrcs/time'
+
+@Mixin(serverTime.mixin.ToDoFactory, core.class.Class)
+export class TToDoFactory extends TClass implements ToDoFactory {
+  factory!: Resource<(tx: Tx, control: TriggerControl) => Promise<Tx[]>>
+}
+
+@Mixin(serverTime.mixin.OnToDo, core.class.Class)
+export class TOnToDo extends TClass implements OnToDo {
+  onDone!: Resource<(control: TriggerControl, workslots: WorkSlot[], todo: ToDo) => Promise<Tx[]>>
+}
+
+export function createModel (builder: Builder): void {
+  builder.createModel(TToDoFactory, TOnToDo)
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnTask,
+    isAsync: true
+  })
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnToDoUpdate,
+    txMatch: {
+      _class: core.class.TxUpdateDoc,
+      objectClass: time.class.ToDo
+    }
+  })
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnToDoRemove,
+    txMatch: {
+      _class: core.class.TxRemoveDoc,
+      objectClass: time.class.ToDo
+    }
+  })
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnToDoCreate,
+    txMatch: {
+      _class: core.class.TxCreateDoc,
+      objectClass: time.class.ToDo
+    },
+    isAsync: true
+  })
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnWorkSlotCreate,
+    txMatch: {
+      _class: core.class.TxCreateDoc,
+      objectClass: time.class.WorkSlot
+    }
+  })
+
+  builder.createDoc(serverCore.class.Trigger, core.space.Model, {
+    trigger: serverTime.trigger.OnWorkSlotUpdate,
+    txMatch: {
+      _class: core.class.TxUpdateDoc,
+      objectClass: time.class.WorkSlot
+    }
+  })
+
+  builder.mixin(tracker.class.Issue, core.class.Class, serverTime.mixin.ToDoFactory, {
+    factory: serverTime.function.IssueToDoFactory
+  })
+
+  builder.mixin(tracker.class.Issue, core.class.Class, serverTime.mixin.OnToDo, {
+    onDone: serverTime.function.IssueToDoDone
+  })
+
+  builder.mixin(time.class.ToDo, core.class.Class, serverCore.mixin.SearchPresenter, {
+    title: [['title']]
+  })
+}
+
+export * from '@opensrcs/server-time'

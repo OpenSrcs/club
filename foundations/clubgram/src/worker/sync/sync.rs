@@ -1,0 +1,901 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, atomic::AtomicU32};
+
+use anyhow::{Context, Result, anyhow};
+use grammers_client::InputMessage;
+use grammers_client::types::Message;
+use grammers_client::types::{Chat, PackedChat};
+use clubrs::services::core::{SocialIdId, WorkspaceUuid};
+use clubrs::services::jwt::ClaimsBuilder;
+use interpolator::Formattable;
+use multimap::MultiMap;
+use tokio::{
+    self,
+    sync::{Mutex, Semaphore, mpsc},
+    task::{Builder as TaskBuilder, JoinHandle},
+    time::{self, Duration},
+};
+use tracing::*;
+
+use super::{
+    super::context::WorkerContext, context::SyncContext, context::SyncInfo, export::Exporter,
+    state::Progress,
+};
+use crate::integration::{Access, ChannelConfig, WorkspaceIntegration};
+use crate::telegram::{ChatExt, MessageExt};
+use crate::worker::sync::state::ClubMessage;
+use crate::worker::sync::tx::TransactorExt;
+use crate::{
+    config::{CONFIG, clubrs::SERVICES},
+    integration::TelegramIntegration,
+};
+
+use crate::reverse::ReverseEvent;
+
+struct SyncChat {
+    sender_realtime: mpsc::Sender<Arc<ImporterEvent>>,
+    sender_backfill: mpsc::Sender<Arc<ImporterEvent>>,
+
+    context: Arc<SyncContext>,
+}
+
+#[derive(strum::Display)]
+enum ImporterEvent {
+    BackfillMessage(Message),
+    BackfillComplete,
+
+    NewMessage(Message),
+    MessageEdited(Message),
+    MessageDeleted(Vec<i32>),
+
+    Reverse(ReverseEvent),
+}
+
+impl ImporterEvent {
+    fn id(&self) -> i32 {
+        match self {
+            ImporterEvent::BackfillMessage(message) => message.id(),
+            ImporterEvent::NewMessage(message) => message.id(),
+            ImporterEvent::MessageEdited(message) => message.id(),
+            ImporterEvent::MessageDeleted(_) => -1,
+            ImporterEvent::BackfillComplete => -1,
+            ImporterEvent::Reverse(_) => -1,
+        }
+    }
+}
+
+impl SyncChat {
+    #[instrument(level = "trace", skip_all)]
+    async fn spawn(context: SyncContext) -> (Self, JoinHandle<()>) {
+        let context = Arc::new(context);
+
+        let (sender_backfill, receiver_backfill) = mpsc::channel(1);
+        let (sender_realtime, receiver_realtime) = mpsc::channel(16);
+
+        let export = TaskBuilder::new()
+            .name(&format!("export-{}", context.chat.id()))
+            .spawn(Self::export_task(
+                context.clone(),
+                receiver_backfill,
+                receiver_realtime,
+            ))
+            .unwrap();
+
+        (
+            SyncChat {
+                sender_realtime,
+                sender_backfill,
+                context,
+            },
+            export,
+        )
+    }
+
+    #[instrument(level = "debug", name="export", skip_all, fields(chat_id = %context.chat.id(), chat_name = %context.chat.card_title()))]
+    async fn export_task(
+        context: Arc<SyncContext>,
+        mut receiver_backfill: mpsc::Receiver<Arc<ImporterEvent>>,
+        mut receiver_realtime: mpsc::Receiver<Arc<ImporterEvent>>,
+    ) {
+        let mut exporter = Exporter::new(context.clone());
+        let mut debouncer = HashSet::new();
+
+        loop {
+            #[instrument(level = "debug", skip_all, fields(event_type = %event.to_string(), event_id = %event.id()))]
+            async fn process_event(
+                event: Arc<ImporterEvent>,
+                context: Arc<SyncContext>,
+                debouncer: &mut HashSet<i32>,
+                exporter: &mut Exporter,
+            ) -> Result<()> {
+                let state = &context.state;
+
+                match &*event {
+                    ImporterEvent::BackfillMessage(message) => {
+                        let telegram_id = message.id();
+
+                        let person_id = exporter
+                            .ensure_person(message)
+                            .await
+                            .context("EnsurePerson")?;
+
+                        match state
+                            .get_h_message(telegram_id)
+                            .await
+                            .context("GetHMessage")?
+                        {
+                            None => {
+                                let club_message = exporter
+                                    .new_message(&person_id, &message, false)
+                                    .await
+                                    .context("NewMessage")?;
+
+                                state
+                                    .set_message(telegram_id, club_message)
+                                    .await
+                                    .context("SetMessage")?;
+                            }
+
+                            Some(club_message) if message.last_date() > club_message.date => {
+                                exporter
+                                    .edit(&person_id, club_message, message)
+                                    .await
+                                    .context("Edit")?;
+                            }
+
+                            Some(_) => {
+                                //
+                            }
+                        }
+
+                        state
+                            .set_progress(Progress::Progress(telegram_id))
+                            .await
+                            .context("SetProgress")?;
+                    }
+
+                    ImporterEvent::BackfillComplete => {
+                        if !crate::config::CONFIG.dry_run {
+                            _ = state.set_progress(Progress::Complete).await;
+                        }
+
+                        debug!("BackfillComplete");
+                    }
+
+                    ImporterEvent::NewMessage(message) => {
+                        let telegram_id = message.id();
+
+                        if state.get_h_message(telegram_id).await?.is_none() {
+                            let person_id = exporter.ensure_person(message).await?;
+                            let club_id = exporter.new_message(&person_id, &message, true).await?;
+
+                            state.set_message(telegram_id, club_id.clone()).await?;
+
+                            debug!(%club_id.id, telegram_message_id=%telegram_id, "NewMessage");
+                        }
+                    }
+
+                    ImporterEvent::MessageEdited(message) => {
+                        let telegram_id = message.id();
+
+                        if !debouncer.remove(&telegram_id) {
+                            if let Some(club_message) = state.get_h_message(message.id()).await? {
+                                let person_id = exporter.ensure_person(message).await?;
+
+                                let club_message =
+                                    exporter.edit(&person_id, club_message, message).await?;
+
+                                state.set_message(telegram_id, club_message.clone()).await?;
+
+                                debug!(%club_message.id, telegram_message_id=%telegram_id, "MessageEdited");
+                            }
+                        }
+                    }
+
+                    ImporterEvent::MessageDeleted(messages) => {
+                        for message in messages {
+                            if let Some(club_message) = state.get_h_message(*message).await? {
+                                exporter.delete(&club_message.id).await.context("Delete")?;
+
+                                debug!(%club_message.id, telegram_message_id=%message, "MessageDeleted");
+                            }
+                        }
+                    }
+
+                    ImporterEvent::Reverse(reverse) => {
+                        let club_message_id = reverse.club_message_id();
+                        let chat = context.chat.pack();
+
+                        let telegram_id = state.get_t_message(&club_message_id).await?;
+                        let telegram = &context.worker.telegram;
+
+                        async fn prepare_message(
+                            chat: PackedChat,
+                            content: &str,
+                            transactor: &impl TransactorExt,
+                            social_id: &SocialIdId,
+                        ) -> Result<InputMessage> {
+                            let name = transactor.lookup_person_name(social_id).await?;
+
+                            let default_template = "{content}".to_string();
+                            let template = match CONFIG.message_tearline.as_ref() {
+                                Some(template) if chat.is_channel() => {
+                                    format!("{content}\n\n{}", template)
+                                }
+                                _ => default_template.clone(),
+                            };
+
+                            let mut context = HashMap::new();
+                            context.insert("content", Formattable::display(&content));
+
+                            if let Some((last_name, first_name)) = &name {
+                                context.insert("first_name", Formattable::display(first_name));
+                                context.insert("last_name", Formattable::display(last_name));
+                            }
+
+                            use interpolator::format;
+
+                            let content = format(&template, &context).unwrap_or_else(|error| {
+                                warn!(%error, template, "Failed to format message template");
+                                format(&default_template, &context)
+                                    .expect("Failed to format default template")
+                            });
+
+                            Ok(InputMessage::markdown(&content))
+                        }
+
+                        match reverse {
+                            ReverseEvent::MessageCreated(create) => {
+                                if telegram_id.is_none() {
+                                    let message = prepare_message(
+                                        chat,
+                                        &create.content,
+                                        &context.transactor,
+                                        &create.social_id,
+                                    )
+                                    .await?;
+
+                                    let message = telegram.send_message(chat, message).await?;
+
+                                    let club_message = ClubMessage {
+                                        id: club_message_id.clone(),
+                                        date: message.last_date(),
+                                    };
+
+                                    state.set_message(message.id(), club_message).await?;
+
+                                    debug!(%club_message_id, telegram_message_id=message.id(), "ReverseUpdate::MessageCreated");
+                                }
+                            }
+                            ReverseEvent::MessageUpdated(update) => {
+                                if let Some(telegram_message_id) = telegram_id {
+                                    if !debouncer.remove(&telegram_message_id) {
+                                        let messages = telegram
+                                            .get_messages_by_id(chat, &[telegram_message_id])
+                                            .await?;
+
+                                        if let [Some(_)] = messages.as_slice() {
+                                            let message = prepare_message(
+                                                chat,
+                                                &update.content,
+                                                &context.transactor,
+                                                &update.social_id,
+                                            )
+                                            .await?;
+
+                                            telegram
+                                                .edit_message(chat, telegram_message_id, message)
+                                                .await?;
+
+                                            debouncer.insert(telegram_message_id);
+
+                                            debug!(%club_message_id, telegram_message_id=telegram_id, "ReverseUpdate::MessageUpdated");
+                                        }
+                                    }
+                                }
+                            }
+                            ReverseEvent::MessageDeleted(_) => {
+                                if let Some(telegram_id) = telegram_id {
+                                    telegram.delete_messages(chat, &[telegram_id]).await?;
+                                    debug!(%club_message_id, telegram_message_id=telegram_id, "ReverseUpdate::MessageDeleted",);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            let event = tokio::select! {
+                biased;
+
+                event = receiver_realtime.recv() => {
+                    event
+                }
+
+                event = receiver_backfill.recv() => {
+                    event
+                }
+
+                else => {
+                    None
+                }
+            };
+
+            if let Some(event) = event {
+                if let Err(error) =
+                    process_event(event, context.clone(), &mut debouncer, &mut exporter).await
+                {
+                    error!(?error, "Process event");
+                }
+            } else {
+                debug!("Exporter task exiting, receivers closed, terminating sync loop");
+                break;
+            }
+        }
+    }
+
+    #[instrument(level = "debug", skip_all, fields(id = _id,  telegram_id = %self.context.worker.me.id(), chat_id = %self.context.chat.id(), chat_name = %self.context.chat.card_title()))]
+    async fn backfill(&self, _id: u32, progress: Progress) {
+        assert_ne!(progress, Progress::Complete);
+
+        debug!("Backfill begin");
+
+        let mut messages = self
+            .context
+            .worker
+            .telegram
+            .iter_messages(self.context.chat.pack());
+
+        if let Progress::Progress(offset) = progress {
+            messages = messages.offset_id(offset);
+        }
+
+        loop {
+            let next = time::timeout(Duration::from_secs(30), messages.next());
+
+            self.context
+                .worker
+                .global
+                .limiters()
+                .get_history
+                .until_key_ready(&self.context.worker.me.id())
+                .await;
+
+            match next.await {
+                Ok(Ok(Some(message))) => {
+                    let _ = self
+                        .sender_backfill
+                        .send(Arc::new(ImporterEvent::BackfillMessage(message)))
+                        .await;
+                }
+                Ok(Ok(_)) => {
+                    trace!("No more messages");
+                    let _ = self
+                        .sender_backfill
+                        .send(Arc::new(ImporterEvent::BackfillComplete))
+                        .await;
+                    break;
+                }
+
+                Ok(Err(e)) => {
+                    error!(error = %e);
+                    break;
+                }
+
+                Err(error) => {
+                    error!(error = %error, "Timeout");
+                }
+            }
+        }
+
+        debug!("Backfill complete");
+    }
+}
+
+#[derive(Clone, Copy, serde::Serialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncMode {
+    Sync,
+    Disabled,
+    Unknown,
+}
+
+use crate::context::GlobalContext;
+use grammers_client::Client as TelegramClient;
+
+pub struct Sync {
+    syncs: MultiMap<String, Arc<SyncChat>>,
+    chats: Vec<(WorkspaceUuid, Arc<Chat>, SyncMode)>,
+    all_chats: Vec<Arc<Chat>>,
+    integrations: Vec<WorkspaceIntegration>,
+    cleanup: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    context: Arc<GlobalContext>,
+}
+
+impl Sync {
+    pub fn new(global: Arc<GlobalContext>) -> Self {
+        Self {
+            context: global,
+            syncs: MultiMap::new(),
+            chats: Vec::default(),
+            all_chats: Vec::default(),
+            integrations: Vec::default(),
+            cleanup: Arc::default(),
+        }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub async fn spawn(&mut self, telegram: TelegramClient) -> Result<()> {
+        self.syncs.clear();
+
+        let context = Arc::new(WorkerContext::new(self.context.clone(), telegram).await?);
+
+        let global_services = &context.global;
+
+        let me = Arc::new(context.telegram.get_me().await?);
+
+        self.integrations = global_services
+            .account()
+            .find_workspace_integrations(me.id())
+            .await?;
+
+        let mut iter_dialogs = context.telegram.iter_dialogs();
+
+        while let Some(dialog) = iter_dialogs.next().await? {
+            if !dialog.chat().is_deleted() && !dialog.chat().is_migrated() {
+                self.all_chats.push(Arc::new(dialog.chat().to_owned()));
+            }
+        }
+
+        let all_chats = self.all_chats.len();
+        let mut sync_active = 0;
+        let mut sync_disabled = 0;
+        let mut sync_unknown = 0;
+
+        #[derive(Debug)]
+        struct ChannelInfo {
+            title: String,
+            is_personal: bool,
+        }
+
+        #[derive(Debug, Default)]
+        struct WSCache {
+            inner: HashMap<WorkspaceUuid, HashMap<String, ChannelInfo>>,
+        }
+
+        impl WSCache {
+            async fn get(
+                &mut self,
+                context: &SyncContext,
+                workspace_id: WorkspaceUuid,
+            ) -> Result<&HashMap<String, ChannelInfo>> {
+                if !self.inner.contains_key(&workspace_id) {
+                    let enumerated = context.transactor.enumerate_channels().await?;
+                    let person_space = context
+                        .transactor
+                        .find_personal_space(context.worker.account_id)
+                        .await?;
+
+                    let mut channels = HashMap::default();
+
+                    for ch in enumerated {
+                        let is_personal = match &person_space {
+                            Some(space) if space == &ch.space => true,
+                            _ => false,
+                        };
+
+                        channels.insert(
+                            ch.id,
+                            ChannelInfo {
+                                title: ch.title,
+                                is_personal,
+                            },
+                        );
+                    }
+
+                    self.inner.insert(workspace_id, channels);
+                }
+
+                Ok(self.inner.get(&workspace_id).unwrap())
+            }
+        }
+
+        let mut wschannels = WSCache::default();
+
+        let mut spawn_sync = async |integration: &WorkspaceIntegration,
+                                    chat: &Arc<Chat>,
+                                    config: &ChannelConfig|
+               -> Result<SyncMode> {
+            let transactor = SERVICES.new_transactor_client(
+                integration.endpoint.clone(),
+                &ClaimsBuilder::default()
+                    .system_account()
+                    .workspace(integration.workspace_id)
+                    .extra("service", &CONFIG.service_id)
+                    .build()?,
+            )?;
+
+            let (info, is_fresh) = if let Some(mut info) = SyncContext::load_sync_info(
+                &global_services,
+                integration.workspace_id,
+                context.me.id(),
+                &chat.global_id(),
+            )
+            .await?
+            {
+                // temp migration fixture
+                if info.club_space_id.is_empty() {
+                    let person_space = transactor
+                        .find_personal_space(context.account_id)
+                        .await?
+                        .ok_or_else(|| {
+                            warn!(account_id = %context.account_id, "Personal space not found");
+                            anyhow!("NoPersonalSpace")
+                        })?;
+
+                    info.club_space_id = config
+                        .space
+                        .as_ref()
+                        .map(|s| s.to_owned())
+                        .unwrap_or_else(|| {
+                            if config.access == Some(Access::Public) {
+                                String::from("card:space:Default")
+                            } else {
+                                person_space
+                            }
+                        });
+
+                    SyncContext::store_sync_info(&global_services, &info).await?;
+                }
+                // end of temp migration fixture
+
+                (info, false)
+            } else {
+                let personal_space = transactor
+                    .find_personal_space(context.account_id)
+                    .await?
+                    .ok_or_else(|| {
+                        warn!(account_id = %context.account_id, "Personal space not found");
+                        anyhow!("NoPersonalSpace")
+                    })?;
+
+                let club_space_id =
+                    config
+                        .space
+                        .as_ref()
+                        .map(|s| s.to_owned())
+                        .unwrap_or_else(|| {
+                            if config.access == Some(Access::Public) {
+                                String::from("card:space:Default")
+                            } else {
+                                personal_space
+                            }
+                        });
+
+                let info = SyncInfo {
+                    telegram_user_id: context.me.id(),
+                    telegram_chat_id: chat.global_id(),
+                    telegram_phone_number: context.me.phone().unwrap().to_string(),
+
+                    club_workspace_id: integration.workspace_id,
+                    club_space_id,
+                    club_card_id: ksuid::Ksuid::generate().to_base62(),
+                    club_card_title: chat.card_title(),
+                };
+
+                SyncContext::store_sync_info(&global_services, &info).await?;
+
+                debug!(club_space_id = %info.club_space_id, club_card_id = %info.club_card_id, "Initialize SyncInfo");
+
+                (info, true)
+            };
+
+            let mut context =
+                SyncContext::new(context.clone(), chat.clone(), integration, info).await?;
+
+            let ws_channels = wschannels.get(&context, integration.workspace_id).await?;
+
+            if ws_channels.get(&context.info.club_card_id).is_none() {
+                // club channel does not exist
+
+                if !is_fresh {
+                    // reset context (and lazily re-create)
+
+                    let club_card_id_old = context.info.club_card_id.clone();
+
+                    SyncContext::cleanup(
+                        &context.worker.global,
+                        context.info.club_workspace_id,
+                        context.info.telegram_user_id,
+                        &context.info.telegram_chat_id,
+                    )
+                    .await?;
+
+                    context = context.set_club_card_id(ksuid::Ksuid::generate().to_base62());
+
+                    SyncContext::store_sync_info(&context.worker.global, &context.info).await?;
+
+                    debug!(
+                        club_card_id_old = club_card_id_old,
+                        club_card_id = context.info.club_card_id,
+                        "Club channel does not exist, re-creating"
+                    );
+                }
+
+                Exporter::create_card(&context).await?;
+            }
+
+            debug!(club_card_id = context.info.club_card_id, "Sync spawned");
+
+            let (sync, handle) = SyncChat::spawn(context).await;
+
+            self.cleanup.lock().await.push(handle);
+            self.syncs.insert(chat.global_id(), Arc::new(sync));
+            sync_active += 1;
+
+            Ok(SyncMode::Sync)
+        };
+
+        for chat in &self.all_chats {
+            for integration in &self.integrations {
+                let mode = match integration.find_config(chat.id()) {
+                    // sync enabled
+                    Some(config) if config.enabled => {
+                        let span = debug_span!("Spawn synchronisation",
+                            club_workspace = %integration.workspace_id,
+                            club_account = %context.account_id,
+                            telegram_phone = %context.me.phone().unwrap_or_default(),
+                            telegram_user = %context.me.id(),
+                            telegram_chat = %chat.id(),
+                            telegram_chat_title = %chat.card_title()
+                        );
+
+                        spawn_sync(integration, chat, config)
+                            .instrument(span)
+                            .await?
+                    }
+
+                    // sync disabled
+                    Some(_channel) => {
+                        sync_disabled += 1;
+                        SyncMode::Disabled
+                    }
+
+                    // no sync configuration
+                    None => {
+                        if SyncContext::cleanup(
+                            global_services,
+                            integration.workspace_id,
+                            context.me.id(),
+                            &chat.global_id(),
+                        )
+                        .await?
+                        {
+                            debug!(workspace = %integration.workspace_id,
+                                telegram_user = %context.me.id(),
+                                telegram_chat = %chat.global_id(),
+                                telegram_chat_title = %chat.card_title(),
+                            "Sync cleanup");
+                        }
+
+                        sync_unknown += 1;
+                        SyncMode::Unknown
+                    }
+                };
+
+                self.chats
+                    .push((integration.workspace_id, chat.clone(), mode))
+            }
+        }
+
+        debug!(
+            all_chats,
+            sync_active, sync_disabled, sync_unknown, "Sync stats"
+        );
+
+        let mut syncs = self.syncs.flat_iter().collect::<Vec<_>>();
+        // ???
+        syncs.sort_by_key(|(channel_id, _)| *channel_id);
+        syncs.reverse();
+
+        let syncs = syncs
+            .into_iter()
+            .map(|(_, sync)| sync.clone())
+            .collect::<Vec<_>>();
+
+        let global_semaphore = context.global.limiters().sync_semaphore.clone();
+
+        let cleanup = self.cleanup.clone();
+
+        let task = async move {
+            let local_semaphore = Arc::new(Semaphore::new(CONFIG.sync_process_limit_local));
+
+            for sync in syncs.into_iter() {
+                match sync.context.state.get_progress().await {
+                    Ok(Progress::Complete) => {
+                        continue;
+                    }
+
+                    Ok(progress) => {
+                        static IDS: AtomicU32 = AtomicU32::new(0);
+
+                        let id = IDS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+                        let local_permit = local_semaphore.clone().acquire_owned().await.unwrap();
+                        let global_permit = global_semaphore.clone().acquire_owned().await.unwrap();
+
+                        trace!(
+                            id,
+                            permits = global_semaphore.available_permits(),
+                            "Backfill permit acquired"
+                        );
+
+                        let sync = TaskBuilder::new().name(&format!("backfill-{}", id)).spawn(
+                            async move {
+                                sync.backfill(id, progress).await;
+
+                                drop(local_permit);
+                                drop(global_permit);
+                            },
+                        );
+
+                        match sync {
+                            Ok(handle) => {
+                                cleanup.lock().await.push(handle);
+                            }
+                            Err(error) => {
+                                error!(%error, "Cannot spawn backfill task");
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        error!(%error, "Cannot get progress");
+                    }
+                }
+            }
+        };
+
+        let handle = TaskBuilder::new()
+            .name(&format!("scheduler-{}", context.me.id()))
+            .spawn(task)?;
+
+        self.cleanup.lock().await.push(handle);
+
+        Ok(())
+    }
+
+    pub fn chats(&self, workspace: WorkspaceUuid) -> Vec<(Arc<Chat>, SyncMode)> {
+        if self
+            .integrations
+            .iter()
+            .any(|i| i.workspace_id == workspace)
+        {
+            self.chats
+                .iter()
+                .filter(|(w, _, _)| *w == workspace)
+                .map(|(_, c, m)| (c.clone(), *m))
+                .collect()
+        } else {
+            self.all_chats
+                .iter()
+                .map(|c| (c.clone(), SyncMode::Unknown))
+                .collect()
+        }
+    }
+
+    pub async fn handle_update(&mut self, update: grammers_client::types::Update) -> Result<()> {
+        use grammers_client::types::Update;
+
+        fn is_empty(message: &grammers_client::types::update::Message) -> bool {
+            use grammers_tl_types::enums::{Message, Update};
+            use grammers_tl_types::types::{UpdateEditMessage, UpdateNewMessage};
+
+            let r = matches!(
+                message.raw,
+                Update::NewMessage(UpdateNewMessage {
+                    message: Message::Empty(_),
+                    ..
+                }) | Update::EditMessage(UpdateEditMessage {
+                    message: Message::Empty(_),
+                    ..
+                })
+            );
+
+            if r {
+                debug!("Empty message");
+            }
+
+            r
+        }
+
+        match update {
+            Update::NewMessage(message) if !is_empty(&message) => {
+                let chat_id = message.chat().global_id();
+
+                if let Some(syncs) = self.syncs.get_vec_mut(&chat_id) {
+                    for sync in syncs {
+                        let _ = sync
+                            .sender_realtime
+                            .send(Arc::new(ImporterEvent::NewMessage((*message).clone())))
+                            .await;
+                    }
+                }
+            }
+
+            Update::MessageEdited(message) => {
+                let chat_id = message.chat().global_id();
+
+                if let Some(syncs) = self.syncs.get_vec_mut(&chat_id) {
+                    for sync in syncs {
+                        let _ = sync
+                            .sender_realtime
+                            .send(Arc::new(ImporterEvent::MessageEdited((*message).clone())))
+                            .await;
+                    }
+                }
+            }
+
+            Update::MessageDeleted(message) => {
+                if !message.messages().is_empty() {
+                    if let Some(channel_id) = message.channel_id() {
+                        if let Some(syncs) =
+                            self.syncs.get_vec_mut(&Chat::channel_global_id(channel_id))
+                        {
+                            for sync in syncs {
+                                let _ = sync
+                                    .sender_realtime
+                                    .send(Arc::new(ImporterEvent::MessageDeleted(
+                                        message.messages().to_vec(),
+                                    )))
+                                    .await;
+                            }
+                        }
+                    } else {
+                        // have iterate over all syncs :(
+                        for (_, sync) in self.syncs.flat_iter_mut() {
+                            let _ = sync
+                                .sender_realtime
+                                .send(Arc::new(ImporterEvent::MessageDeleted(
+                                    message.messages().to_vec(),
+                                )))
+                                .await;
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_reverse_update(
+        &self,
+        sync_info: &SyncInfo,
+        update: ReverseEvent,
+    ) -> Result<()> {
+        let syncs = self.syncs.get_vec(&sync_info.telegram_chat_id);
+
+        if let Some(syncs) = syncs
+            && let Some(sync) = syncs
+                .iter()
+                .find(|sync| sync.context.info.club_workspace_id == sync_info.club_workspace_id)
+        {
+            sync.sender_realtime
+                .send(Arc::new(ImporterEvent::Reverse(update)))
+                .await?;
+        }
+        // probably post to other workspaces
+
+        Ok(())
+    }
+
+    pub async fn abort(self) {
+        for handle in self.cleanup.lock().await.drain(..) {
+            handle.abort();
+        }
+    }
+}

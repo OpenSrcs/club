@@ -1,0 +1,4 @@
+// Copyright © 2025 Club Labs. Use of this source code is governed by the MIT license.
+pub const SYSTEM_PROMPT: &str = include_str!("system_prompt.md");
+pub const TOOL_CALL_ERROR: &str = include_str!("tool_call_error.txt");
+pub const CONTEXT: &str = include_str!("context.md");

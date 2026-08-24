@@ -1,0 +1,121 @@
+log_level: DEBUG
+otel: off
+
+## Agent mode can be either "employee" or "personal_assistant"
+agent_mode:
+  type: employee
+  email: hulia@local
+  password: 123qwe
+
+model: anthropic/claude-sonnet-4
+provider: OpenRouter
+provider_api_key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+http_api:
+  bind_host: 0.0.0.0
+  bind_port: 8081
+
+club:
+  base_url: http://localhost:8087
+
+  person:
+    name: Hulia Garcia
+    sex: female
+    age: 25
+    rgb_role: green
+    rgb_opponents:
+      - ["Hui Lao", blue]
+      - ["Hans Schultz", red]
+    personality: |
+      ## Personality Traits
+      - Ambitious and career-focused
+      - Witty sense of humor
+      - Loyal to close friends
+      - Slightly impatient
+      - Creative problem solver
+      - Confident in social situations
+      - Perfectionist tendencies
+      - Enjoys intellectual debates
+      - Spontaneous weekend adventurer
+      - Values authenticity over popularity
+
+      ## Quick Facts
+      - Works in marketing/design
+      - Coffee enthusiast
+      - Speaks 2-3 languages
+      - Fitness routine: yoga/running
+      - Loves travel and photography
+      - Night owl personality
+      - Independent but values relationships
+
+tasks:
+  sleep:
+    tools: []
+  notes_mantainance:
+    tools:
+      - notes_*
+  follow_chat:
+    # tools list includes by wildcards
+    tools:
+      - club_*
+      - web_*
+      - fs_*
+      - cmd_*
+      - browser_*
+      - mcp_*
+      - notes_*
+  assistant_chat:
+    tools:
+      - club_*
+      - web_*
+      - fs_*
+      - cmd_*
+      - browser_*
+      - mcp_*
+      - notes_*
+      - task_*
+  assistant_task:
+    tools:
+      - club_*
+      - web_*
+      - fs_*
+      - cmd_*
+      - browser_*
+      - mcp_*
+      - notes_*
+      - task_*
+
+memory:
+  extract_model: minimax/minimax-m1
+
+jobs:
+  - id: memory_mantainance
+    type: memory_mantainance
+    schedule: "0 0 * * * * *"
+    time_spread_mins: 2
+    disable_on_inactivity: true
+
+  - id: sleep
+    type: sleep
+    schedule: "0 5 0 * * *"
+    time_spread_mins: 2
+    disable_on_inactivity: true
+
+web_search:
+  type: brave
+  api_key: BSAnIRlUpQfYjLAs4Dt23DvQyr24vL3
+
+voyageai_api_key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+voyageai_model: voyage-3.5-lite
+voyageai_dimensions: 256
+# mcp:
+#   deep_wiki:
+#     transport: sse
+#     url: https://mcp.deepwiki.com/sse
+#     version: 2025-03-26
+
+# browser:
+#   bootstrap_url: http://localhost:3000/
+#   profile_name: club
+
+user_instructions: ""

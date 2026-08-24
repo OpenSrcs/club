@@ -1,0 +1,6 @@
+/.vscode/launch.json
+/target/
+/data/
+club-ai-agent-image.tar
+config-local.yml
+/request.json

@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/core",
+      "comment": "Fix object clone",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@opensrcs/core"
+}

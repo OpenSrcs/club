@@ -1,0 +1,21 @@
+bind_port = 8086
+bind_host = "127.0.0.1"
+
+service_id = "clubgram"
+kvs_namespace = "clubgram"
+outbound_tx_topic = "clubgun"
+inbound_tx_topic = "cockroach.tx"
+inbound_tx_group_id = "clubgram"
+get_file_rate_limit = 5
+sync_process_limit = 30
+sync_process_limit_local = 5
+get_history_rate_limit = 3000
+
+blob_service_path = "http://localhost:4030"
+base_url = "https://clubgram.aristov.cc"
+dry_run = false
+
+redis_urls = "redis://127.0.0.1:6379"
+redis_password = "<invalid>"
+redis_mode = "direct"
+redis_service = "mymaster"

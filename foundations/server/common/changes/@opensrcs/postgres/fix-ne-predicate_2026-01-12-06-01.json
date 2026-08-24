@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/postgres",
+      "comment": "Fix ne predicate",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@opensrcs/postgres"
+}

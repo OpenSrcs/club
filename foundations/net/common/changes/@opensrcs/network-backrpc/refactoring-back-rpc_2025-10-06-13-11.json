@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/network-backrpc",
+      "comment": "typing refactoring",
+      "type": "none"
+    }
+  ],
+  "packageName": "@opensrcs/network-backrpc"
+}

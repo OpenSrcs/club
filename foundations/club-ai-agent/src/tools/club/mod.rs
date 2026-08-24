@@ -1,0 +1,525 @@
+// Copyright © 2025 Club Labs. Use of this source code is governed by the MIT license.
+
+use std::{collections::HashMap, path::PathBuf};
+
+use anyhow::{Result, anyhow};
+use async_trait::async_trait;
+use base64::Engine;
+use clubrs::services::transactor::comm::{
+    BlobData, BlobPatchEventBuilder, BlobPatchOperation, CreateMessageEventBuilder, Envelope,
+    MessageRequestType, MessageType,
+};
+use itertools::Itertools;
+use reqwest::header::{self, HeaderMap, HeaderValue};
+use reqwest_tracing::{DefaultSpanBackend, OtelName};
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use tokio::{fs::File, io::AsyncReadExt};
+use uuid::Uuid;
+
+use crate::{
+    config::Config,
+    context::AgentContext,
+    club::{self, blob::BlobClient},
+    state::AgentState,
+    tools::{ToolImpl, ToolSet},
+    types::{ContentFormat, Image, ImageMediaType, Text, ToolResultContent},
+    utils::normalize_path,
+};
+
+pub struct ClubToolSet {
+    presenter: Option<ClubAiPresenterClient>,
+}
+
+impl ToolSet for ClubToolSet {
+    fn get_name(&self) -> &str {
+        "club"
+    }
+
+    async fn get_tools<'a>(
+        &self,
+        config: &'a Config,
+        context: &'a AgentContext,
+        _state: &'a AgentState,
+    ) -> Vec<Box<dyn ToolImpl>> {
+        let mut tools: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("tools.json")).unwrap();
+        let mut presenter_tools = Vec::new();
+        if let Some(presenter) = &self.presenter {
+            let params = presenter.get_params_schema().await;
+
+            if let Ok(params) = params {
+                for tool in &mut tools {
+                    let tool_obj = tool
+                        .as_object_mut()
+                        .unwrap()
+                        .get_mut("function")
+                        .unwrap()
+                        .as_object_mut()
+                        .unwrap();
+                    let tool_name = tool_obj.get("name").unwrap().as_str().unwrap();
+                    let Some(params) = params.get(tool_name.trim_start_matches("club_")) else {
+                        continue;
+                    };
+                    presenter_tools.push(tool_name.to_string());
+                    tool_obj.insert("parameters".to_string(), params.clone());
+                }
+            }
+        }
+
+        let mut descriptions = tools
+            .into_iter()
+            .map(|v| (v["function"]["name"].as_str().unwrap().to_string(), v))
+            .collect::<HashMap<String, serde_json::Value>>();
+
+        let mut tools: Vec<Box<dyn ToolImpl>> = vec![
+            Box::new(SendMessageTool {
+                description: descriptions.remove("club_send_message").unwrap(),
+            }),
+            Box::new(AddMessageReactionTool {
+                description: descriptions.remove("club_add_message_reaction").unwrap(),
+            }),
+            Box::new(AddMessageAttachementTool {
+                workspace: config.workspace.clone(),
+                blob_client: context.blob_client.clone(),
+                http_client: reqwest::Client::new(),
+                description: descriptions.remove("club_add_message_attachement").unwrap(),
+            }),
+            Box::new(UsageStatsTool {
+                http_client: reqwest::ClientBuilder::new()
+                    .default_headers({
+                        let mut headers = reqwest::header::HeaderMap::new();
+                        headers.insert(
+                            "Content-Type",
+                            reqwest::header::HeaderValue::from_static("application/json"),
+                        );
+                        headers.insert(
+                            "Authorization",
+                            reqwest::header::HeaderValue::from_str(&format!(
+                                "Bearer {}",
+                                config
+                                    .provider_api_key
+                                    .as_ref()
+                                    .map(|k| k.expose_secret())
+                                    .unwrap_or_default()
+                            ))
+                            .unwrap(),
+                        );
+                        headers
+                    })
+                    .build()
+                    .unwrap(),
+                description: descriptions.remove("club_usage_stats").unwrap(),
+            }),
+        ];
+        if let Some(presenter) = self.presenter.as_ref() {
+            for tool in presenter_tools {
+                tools.push(Box::new(ClubPresenterTool {
+                    client: presenter.clone(),
+                    method: tool.clone(),
+                    description: descriptions
+                        .remove(&tool)
+                        .unwrap_or(serde_json::Value::Null),
+                }));
+            }
+        }
+        tools
+    }
+
+    fn get_system_prompt(&self, _config: &Config) -> String {
+        include_str!("system_prompt.md").to_string()
+    }
+
+    async fn get_static_context(&self, _config: &Config) -> String {
+        let Some(presenter) = &self.presenter else {
+            return "".to_string();
+        };
+
+        let Ok(result) = presenter
+            .call("get_main_classes_hierarchy", json!({}))
+            .await
+        else {
+            return "".to_string();
+        };
+        let text = result
+            .iter()
+            .filter_map(|item| match item {
+                ToolResultContent::Text(text) => Some(text.text.clone()),
+                ToolResultContent::Image(_) => None,
+            })
+            .join("\n\n");
+        format!("# Club Main Classes Hierarchy\n\n```yaml{text}\n```\n\n")
+    }
+}
+
+pub async fn create_club_tool_set(config: &Config, context: &AgentContext) -> Result<ClubToolSet> {
+    let presenter = if let Some(url) = &config.club.presenter_url {
+        let presenter =
+            create_presenter_client(url.clone(), context.account_info.token.clone()).await?;
+        Some(presenter)
+    } else {
+        None
+    };
+
+    Ok(ClubToolSet { presenter })
+}
+
+struct SendMessageTool {
+    description: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct SendMessageToolArgs {
+    card_id: String,
+    content: String,
+}
+
+struct AddMessageReactionTool {
+    description: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct AddMessageReactionToolArgs {
+    card_id: String,
+    message_id: String,
+    reaction: String,
+}
+
+struct AddMessageAttachementTool {
+    workspace: PathBuf,
+    blob_client: BlobClient,
+    http_client: reqwest::Client,
+    description: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct AddMessageAttachementToolArgs {
+    card_id: String,
+    message_id: String,
+    attachement_name: String,
+    attachement_data: String,
+}
+
+struct UsageStatsTool {
+    http_client: reqwest::Client,
+    description: serde_json::Value,
+}
+
+#[async_trait]
+impl ToolImpl for SendMessageTool {
+    fn desciption(&self) -> &serde_json::Value {
+        &self.description
+    }
+
+    async fn call(
+        &mut self,
+        context: &AgentContext,
+        args: serde_json::Value,
+    ) -> Result<Vec<ToolResultContent>> {
+        let args = serde_json::from_value::<SendMessageToolArgs>(args)?;
+        tracing::debug!(
+            card_id = args.card_id,
+            content = args.content,
+            "Send message to card"
+        );
+
+        let create_event = CreateMessageEventBuilder::default()
+            .message_type(MessageType::Text)
+            .card_id(&args.card_id)
+            .card_type("chat:masterTag:Thread")
+            .content(args.content)
+            .social_id(&context.account_info.social_id)
+            .build()
+            .unwrap();
+
+        let create_event = Envelope::new(MessageRequestType::CreateMessage, create_event);
+
+        let res = context.tx_client.tx::<_, Value>(create_event).await?;
+        let _ = context.typing_client.reset_typing(&args.card_id).await;
+
+        Ok(vec![ToolResultContent::text(format!(
+            "Message sent, message_id is {}",
+            res["messageId"]
+        ))])
+    }
+}
+
+#[async_trait]
+impl ToolImpl for AddMessageReactionTool {
+    fn desciption(&self) -> &serde_json::Value {
+        &self.description
+    }
+
+    async fn call(
+        &mut self,
+        context: &AgentContext,
+        args: serde_json::Value,
+    ) -> Result<Vec<ToolResultContent>> {
+        let args = serde_json::from_value::<AddMessageReactionToolArgs>(args)?;
+        tracing::debug!(
+            card_id = args.card_id,
+            message_id = args.message_id,
+            reaction = args.reaction,
+            "Add message reaction"
+        );
+        club::add_reaction(
+            &context.tx_client,
+            &args.card_id,
+            &args.message_id,
+            &context.account_info.social_id,
+            &args.reaction,
+        )
+        .await?;
+        let _ = context.typing_client.reset_typing(&args.card_id).await;
+
+        Ok(vec![ToolResultContent::text(format!(
+            "Successfully added reaction to message with message_id {}",
+            args.message_id
+        ))])
+    }
+}
+
+#[async_trait]
+impl ToolImpl for AddMessageAttachementTool {
+    fn desciption(&self) -> &serde_json::Value {
+        &self.description
+    }
+
+    async fn call(
+        &mut self,
+        context: &AgentContext,
+        args: serde_json::Value,
+    ) -> Result<Vec<ToolResultContent>> {
+        let args = serde_json::from_value::<AddMessageAttachementToolArgs>(args)?;
+        tracing::debug!(
+            card_id = args.card_id,
+            message_id = args.message_id,
+            attachement_name = args.attachement_name,
+            "Add message attachement"
+        );
+
+        let (mime_type, content) = if args.attachement_data.starts_with("data:") {
+            // data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIA...
+            let data = args.attachement_data.split(',').collect::<Vec<&str>>();
+            let mime_type = data[0][5..].split(';').collect::<Vec<&str>>()[0];
+            let content = base64::engine::general_purpose::STANDARD.decode(data[1])?;
+            (mime_type.to_string(), content)
+        } else if args.attachement_data.starts_with("http://")
+            || args.attachement_data.starts_with("https://")
+        {
+            let resp = self
+                .http_client
+                .get(&args.attachement_data)
+                .send()
+                .await?
+                .error_for_status()?;
+            let mime_type = resp
+                .headers()
+                .get("Content-Type")
+                .map(|v| v.to_str().unwrap_or("image/png"))
+                .unwrap_or("image/png")
+                .to_string();
+            let content = resp.bytes().await?.to_vec();
+            (mime_type, content)
+        } else {
+            let path = normalize_path(&self.workspace, &args.attachement_data);
+            let mut file = File::open(path).await?;
+            let mut content = Vec::new();
+            let mime_type = mime_guess::from_path(args.attachement_data)
+                .first_or_text_plain()
+                .to_string();
+            file.read_to_end(&mut content).await?;
+            (mime_type, content)
+        };
+
+        let size = content.len() as u32;
+        let blob_id = Uuid::new_v4().to_string();
+        self.blob_client
+            .upload_file(&blob_id, &mime_type, content)
+            .await?;
+
+        let attachement_event = BlobPatchEventBuilder::default()
+            .card_id(args.card_id)
+            .message_id(&args.message_id)
+            .operations(vec![BlobPatchOperation::Attach {
+                blobs: vec![BlobData {
+                    blob_id,
+                    mime_type,
+                    file_name: args.attachement_name,
+                    size,
+                    metadata: None,
+                }],
+            }])
+            .social_id(&context.account_info.social_id)
+            .build()
+            .unwrap();
+
+        let add_attachement = Envelope::new(MessageRequestType::BlobPatch, attachement_event);
+
+        context.tx_client.tx::<_, Value>(add_attachement).await?;
+        Ok(vec![ToolResultContent::text(format!(
+            "Successfully added attachement to message with message_id {}",
+            &args.message_id
+        ))])
+    }
+}
+
+#[async_trait]
+impl ToolImpl for UsageStatsTool {
+    fn desciption(&self) -> &serde_json::Value {
+        &self.description
+    }
+
+    async fn call(
+        &mut self,
+        _context: &AgentContext,
+        _args: serde_json::Value,
+    ) -> Result<Vec<ToolResultContent>> {
+        tracing::debug!("Usage stats");
+        let resp = self
+            .http_client
+            .get("https://openrouter.ai/api/v1/key")
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        Ok(vec![ToolResultContent::text(resp)])
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ClubAiPresenterClient {
+    client: reqwest_middleware::ClientWithMiddleware,
+    base_url: reqwest::Url,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClubAiPresenterImage {
+    data: String,
+    mime_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase", tag = "type")]
+enum ClubAiPresenterContent {
+    Text(Text),
+    Image(ClubAiPresenterImage),
+}
+
+impl From<ClubAiPresenterContent> for ToolResultContent {
+    fn from(value: ClubAiPresenterContent) -> Self {
+        match value {
+            ClubAiPresenterContent::Text(text) => ToolResultContent::Text(text),
+            ClubAiPresenterContent::Image(image) => ToolResultContent::Image(Image {
+                data: image.data,
+                format: Some(ContentFormat::Base64),
+                media_type: ImageMediaType::from_mime_type(&image.mime_type),
+                detail: None,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+struct ClubAiPresenterResult {
+    success: bool,
+    data: Option<Vec<ClubAiPresenterContent>>,
+    error: Option<String>,
+}
+
+impl TryFrom<ClubAiPresenterResult> for Vec<ToolResultContent> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ClubAiPresenterResult) -> std::result::Result<Self, Self::Error> {
+        if value.success {
+            Ok(value
+                .data
+                .into_iter()
+                .flat_map(|data| data.into_iter())
+                .map(ToolResultContent::from)
+                .collect())
+        } else {
+            Err(anyhow!(
+                "{}",
+                value.error.as_deref().unwrap_or("<unknown error>")
+            ))
+        }
+    }
+}
+
+async fn create_presenter_client(
+    base_url: reqwest::Url,
+    token: SecretString,
+) -> Result<ClubAiPresenterClient> {
+    let mut default_headers = HeaderMap::new();
+    default_headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
+    default_headers.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", token.expose_secret()))?,
+    );
+    let client = reqwest::Client::builder()
+        .default_headers(default_headers)
+        .build()?;
+    let client = reqwest_middleware::ClientBuilder::new(client)
+        .with(reqwest_tracing::TracingMiddleware::<DefaultSpanBackend>::new())
+        .build();
+    Ok(ClubAiPresenterClient { client, base_url })
+}
+
+impl ClubAiPresenterClient {
+    async fn get_params_schema(&self) -> Result<HashMap<String, serde_json::Value>> {
+        let response = self
+            .client
+            .get(self.base_url.join("/params-schema.json")?)
+            .send()
+            .await?;
+        Ok(response.json().await?)
+    }
+
+    async fn call(&self, name: &str, args: serde_json::Value) -> Result<Vec<ToolResultContent>> {
+        tracing::debug!("call {}: {}", name, &args);
+        let response = self
+            .client
+            .post(self.base_url.join(name)?)
+            .with_extension(OtelName(format!("presenter-client-{name}").into()))
+            .json(&args)
+            .send()
+            .await?;
+        let r: serde_json::Value = response.json().await?;
+
+        let response: ClubAiPresenterResult = serde_json::from_value(r)?;
+        response.try_into()
+    }
+}
+
+struct ClubPresenterTool {
+    client: ClubAiPresenterClient,
+    method: String,
+    description: serde_json::Value,
+}
+
+#[async_trait]
+impl ToolImpl for ClubPresenterTool {
+    fn name(&self) -> &str {
+        &self.method
+    }
+
+    fn desciption(&self) -> &serde_json::Value {
+        &self.description
+    }
+
+    async fn call(
+        &mut self,
+        _context: &AgentContext,
+        args: serde_json::Value,
+    ) -> Result<Vec<ToolResultContent>> {
+        Ok(self
+            .client
+            .call(self.method.trim_start_matches("club_"), args)
+            .await?)
+    }
+}

@@ -1,0 +1,153 @@
+use chrono::{DateTime, Utc};
+use grammers_client::types::{Chat, Message, User};
+use grammers_tl_types as tl;
+use clubrs::services::{
+    core::SocialIdType,
+    transactor::person::{EnsurePersonRequest, EnsurePersonRequestBuilder},
+};
+
+use crate::worker::sync::generate_markdown_message;
+
+pub trait MessageExt {
+    fn last_date(&self) -> DateTime<Utc>;
+    fn club_markdown_text(&self) -> String;
+}
+
+impl MessageExt for Message {
+    fn last_date(&self) -> DateTime<Utc> {
+        self.edit_date().unwrap_or_else(|| self.date())
+    }
+
+    fn club_markdown_text(&self) -> String {
+        fn entities(message: &Message) -> Option<&Vec<tl::enums::MessageEntity>> {
+            match &message.raw {
+                tl::enums::Message::Empty(_) => None,
+                tl::enums::Message::Message(message) => message.entities.as_ref(),
+                tl::enums::Message::Service(_) => None,
+            }
+        }
+
+        if let Some(entities) = entities(self) {
+            generate_markdown_message(self.text(), entities)
+        } else {
+            self.text().to_owned()
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatType {
+    User,
+    Group,
+    Channel,
+}
+
+pub trait ChatExt {
+    fn chat_type(&self) -> ChatType;
+    fn is_deleted(&self) -> bool;
+    fn is_migrated(&self) -> bool;
+    fn global_id(&self) -> String;
+    fn channel_global_id(channel_id: i64) -> String;
+
+    fn card_title(&self) -> String;
+}
+
+pub trait EnsurePersonRequestExt {
+    fn ensure_person_request(&self) -> EnsurePersonRequest;
+}
+
+impl ChatExt for Chat {
+    fn chat_type(&self) -> ChatType {
+        match self {
+            Chat::User(_) => ChatType::User,
+            Chat::Group(_) => ChatType::Group,
+            Chat::Channel(_) => ChatType::Channel,
+        }
+    }
+
+    fn is_deleted(&self) -> bool {
+        if let Chat::User(user) = self {
+            return user.deleted();
+        } else {
+            false
+        }
+    }
+
+    fn is_migrated(&self) -> bool {
+        use grammers_client::types::Group;
+
+        matches!(
+            self,
+            Chat::Group(Group {
+                raw: tl::enums::Chat::Chat(c)
+            }) if c.migrated_to.is_some()
+        )
+    }
+
+    fn card_title(&self) -> String {
+        match self {
+            Chat::User(user) => user.full_name().clone(),
+            Chat::Group(group) => group.title().unwrap_or("Unknown Group").to_owned(),
+            Chat::Channel(channel) => channel.title().to_owned(),
+        }
+    }
+
+    fn global_id(&self) -> String {
+        match self {
+            Chat::User(user) => format!("u{}", user.id()),
+            Chat::Group(group) => {
+                format!("g{}", group.id())
+            }
+            Chat::Channel(channel) => Self::channel_global_id(channel.id()),
+        }
+    }
+
+    fn channel_global_id(channel_id: i64) -> String {
+        format!("c{}", channel_id)
+    }
+}
+
+impl EnsurePersonRequestExt for Chat {
+    fn ensure_person_request(&self) -> EnsurePersonRequest {
+        let mut builder = EnsurePersonRequestBuilder::default();
+
+        builder
+            .social_type(SocialIdType::Telegram)
+            .social_value(self.id().to_string());
+
+        match self {
+            Chat::User(user) => {
+                return user.ensure_person_request();
+            }
+
+            Chat::Channel(channel) => {
+                builder.first_name(channel.title().to_owned());
+            }
+
+            Chat::Group(group) => {
+                builder.first_name(group.title().unwrap_or("Telegram Group").to_owned());
+            }
+        }
+
+        builder.build().unwrap()
+    }
+}
+
+impl EnsurePersonRequestExt for User {
+    fn ensure_person_request(&self) -> EnsurePersonRequest {
+        let first_name = self
+            .first_name()
+            .map(ToString::to_string)
+            .unwrap_or("Deleted User".to_string());
+        let last_name = self.last_name().map(ToOwned::to_owned);
+
+        EnsurePersonRequestBuilder::default()
+            .first_name(first_name)
+            .last_name(last_name)
+            .social_type(SocialIdType::Telegram)
+            .social_value(self.id().to_string())
+            .build()
+            .unwrap()
+    }
+}

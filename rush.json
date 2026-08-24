@@ -1,0 +1,2718 @@
+/**
+ * This is the main configuration file for Rush.
+ * For full documentation, please see https://rushjs.io
+ */
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/rush.schema.json",
+
+  /**
+   * (Required) This specifies the version of the Rush engine to be used in this repo.
+   * Rush's "version selector" feature ensures that the globally installed tool will
+   * behave like this release, regardless of which version is installed globally.
+   *
+   * The common/scripts/install-run-rush.js automation script also uses this version.
+   *
+   * NOTE: If you upgrade to a new major version of Rush, you should replace the "v5"
+   * path segment in the "$schema" field for all your Rush config files.  This will ensure
+   * correct error-underlining and tab-completion for editors such as VS Code.
+   */
+  "rushVersion": "5.158.1",
+
+  /**
+   * The next field selects which package manager should be installed and determines its version.
+   * Rush installs its own local copy of the package manager to ensure that your build process
+   * is fully isolated from whatever tools are present in the local environment.
+   *
+   * Specify one of: "pnpmVersion", "npmVersion", or "yarnVersion".  See the Rush documentation
+   * for details about these alternatives.
+   */
+  "pnpmVersion": "10.15.1",
+
+  // "npmVersion": "4.5.0",
+  // "yarnVersion": "1.9.4",
+
+  /**
+   * Older releases of the Node.js engine may be missing features required by your system.
+   * Other releases may have bugs.  In particular, the "latest" version will not be a
+   * Long Term Support (LTS) version and is likely to have regressions.
+   *
+   * Specify a SemVer range to ensure developers use a Node.js version that is appropriate
+   * for your repo.
+   *
+   * LTS schedule: https://nodejs.org/en/about/releases/
+   * LTS versions: https://nodejs.org/en/download/releases/
+   */
+  "nodeSupportedVersionRange": ">=20.0.0 <25.0.0",
+
+  /**
+   * Odd-numbered major versions of Node.js are experimental.  Even-numbered releases
+   * spend six months in a stabilization period before the first Long Term Support (LTS) version.
+   * For example, 8.9.0 was the first LTS version of Node.js 8.  Pre-LTS versions are not recommended
+   * for production usage because they frequently have bugs.  They may cause Rush itself
+   * to malfunction.
+   *
+   * Rush normally prints a warning if it detects a pre-LTS Node.js version.  If you are testing
+   * pre-LTS versions in preparation for supporting the first LTS version, you can use this setting
+   * to disable Rush's warning.
+   */
+  "suppressNodeLtsWarning": true,
+
+  /**
+   * If you would like the version specifiers for your dependencies to be consistent, then
+   * uncomment this line. This is effectively similar to running "rush check" before any
+   * of the following commands:
+   *
+   *   rush install, rush update, rush link, rush version, rush publish
+   *
+   * In some cases you may want this turned on, but need to allow certain packages to use a different
+   * version. In those cases, you will need to add an entry to the "allowedAlternativeVersions"
+   * section of the common-versions.json.
+   */
+  "ensureConsistentVersions": false,
+
+  /**
+   * Large monorepos can become intimidating for newcomers if project folder paths don't follow
+   * a consistent and recognizable pattern.  When the system allows nested folder trees,
+   * we've found that teams will often use subfolders to create islands that isolate
+   * their work from others ("shipping the org").  This hinders collaboration and code sharing.
+   *
+   * The Rush developers recommend a "category folder" model, where buildable project folders
+   * must always be exactly two levels below the repo root.  The parent folder acts as the category.
+   * This provides a basic facility for grouping related projects (e.g. "apps", "libraries",
+   * "tools", "prototypes") while still encouraging teams to organize their projects into
+   * a unified taxonomy.  Limiting to 2 levels seems very restrictive at first, but if you have
+   * 20 categories and 20 projects in each category, this scheme can easily accommodate hundreds
+   * of projects.  In practice, you will find that the folder hierarchy needs to be rebalanced
+   * occasionally, but if that's painful, it's a warning sign that your development style may
+   * discourage refactoring.  Reorganizing the categories should be an enlightening discussion
+   * that brings people together, and maybe also identifies poor coding practices (e.g. file
+   * references that reach into other project's folders without using Node.js module resolution).
+   *
+   * The defaults are projectFolderMinDepth=1 and projectFolderMaxDepth=2.
+   *
+   * To remove these restrictions, you could set projectFolderMinDepth=1
+   * and set projectFolderMaxDepth to a large number.
+   */
+  // "projectFolderMinDepth": 2,
+  "projectFolderMaxDepth": 4,
+
+  /**
+   * Today the npmjs.com registry enforces fairly strict naming rules for packages, but in the early
+   * days there was no standard and hardly any enforcement.  A few large legacy projects are still using
+   * nonstandard package names, and private registries sometimes allow it.  Set "allowMostlyStandardPackageNames"
+   * to true to relax Rush's enforcement of package names.  This allows upper case letters and in the future may
+   * relax other rules, however we want to minimize these exceptions.  Many popular tools use certain punctuation
+   * characters as delimiters, based on the assumption that they will never appear in a package name; thus if we relax
+   * the rules too much it is likely to cause very confusing malfunctions.
+   *
+   * The default value is false.
+   */
+  // "allowMostlyStandardPackageNames": true,
+
+  /**
+   * This feature helps you to review and approve new packages before they are introduced
+   * to your monorepo.  For example, you may be concerned about licensing, code quality,
+   * performance, or simply accumulating too many libraries with overlapping functionality.
+   * The approvals are tracked in two config files "browser-approved-packages.json"
+   * and "nonbrowser-approved-packages.json".  See the Rush documentation for details.
+   */
+  // "approvedPackagesPolicy": {
+  //   /**
+  //    * The review categories allow you to say for example "This library is approved for usage
+  //    * in prototypes, but not in production code."
+  //    *
+  //    * Each project can be associated with one review category, by assigning the "reviewCategory" field
+  //    * in the "projects" section of rush.json.  The approval is then recorded in the files
+  //    * "common/config/rush/browser-approved-packages.json" and "nonbrowser-approved-packages.json"
+  //    * which are automatically generated during "rush update".
+  //    *
+  //    * Designate categories with whatever granularity is appropriate for your review process,
+  //    * or you could just have a single category called "default".
+  //    */
+  //   "reviewCategories": [
+  //     // Some example categories:
+  //     "production", // projects that ship to production
+  //     "tools",      // non-shipping projects that are part of the developer toolchain
+  //     "prototypes"  // experiments that should mostly be ignored by the review process
+  //   ],
+  //
+  //   /**
+  //    * A list of NPM package scopes that will be excluded from review.
+  //    * We recommend to exclude TypeScript typings (the "@types" scope), because
+  //    * if the underlying package was already approved, this would imply that the typings
+  //    * are also approved.
+  //    */
+  //   // "ignoredNpmScopes": ["@types"]
+  // },
+
+  /**
+   * If you use Git as your version control system, this section has some additional
+   * optional features you can use.
+   */
+  "gitPolicy": {
+    /**
+     * Work at a big company?  Tired of finding Git commits at work with unprofessional Git
+     * emails such as "beer-lover@my-college.edu"?  Rush can validate people's Git email address
+     * before they get started.
+     *
+     * Define a list of regular expressions describing allowable e-mail patterns for Git commits.
+     * They are case-insensitive anchored JavaScript RegExps.  Example: ".*@example\.com"
+     *
+     * IMPORTANT: Because these are regular expressions encoded as JSON string literals,
+     * RegExp escapes need two backslashes, and ordinary periods should be "\\.".
+     */
+    // "allowedEmailRegExps": [
+    //   "[^@]+@users\\.noreply\\.github\\.com",
+    //   "travis@example\\.org"
+    // ],
+    /**
+     * When Rush reports that the address is malformed, the notice can include an example
+     * of a recommended email.  Make sure it conforms to one of the allowedEmailRegExps
+     * expressions.
+     */
+    // "sampleEmail": "mrexample@users.noreply.github.com",
+    /**
+     * The commit message to use when committing changes during 'rush publish'.
+     *
+     * For example, if you want to prevent these commits from triggering a CI build,
+     * you might configure your system's trigger to look for a special string such as "[skip-ci]"
+     * in the commit message, and then customize Rush's message to contain that string.
+     */
+    // "versionBumpCommitMessage": "Applying package updates. [skip-ci]",
+    /**
+     * The commit message to use when committing changes during 'rush version'.
+     *
+     * For example, if you want to prevent these commits from triggering a CI build,
+     * you might configure your system's trigger to look for a special string such as "[skip-ci]"
+     * in the commit message, and then customize Rush's message to contain that string.
+     */
+    // "changeLogUpdateCommitMessage": "Deleting change files and updating change logs for package updates. [skip-ci]"
+  },
+
+  "repository": {
+    /**
+     * The URL of this Git repository, used by "rush change" to determine the base branch for your PR.
+     */
+    "url": "https://github.com/opensrcs/club",
+
+    /**
+     * The default branch name. This tells "rush change" which remote branch to compare against.
+     * The default value is "master"
+     */
+    "defaultBranch": "main",
+
+    /**
+     * The default remote. This tells "rush change" which remote to compare against if the remote URL is
+     * not set or if a remote matching the provided remote URL is not found.
+     */
+    "defaultRemote": "origin"
+  },
+
+  /**
+   * Event hooks are customized script actions that Rush executes when specific events occur
+   */
+  "eventHooks": {
+    /**
+     * The list of shell commands to run before the Rush installation starts
+     */
+    "preRushInstall": [
+      // "common/scripts/pre-rush-install.js"
+    ],
+
+    /**
+     * The list of shell commands to run after the Rush installation finishes
+     */
+    "postRushInstall": [],
+
+    /**
+     * The list of shell commands to run before the Rush build command starts
+     */
+    "preRushBuild": [],
+
+    /**
+     * The list of shell commands to run after the Rush build command finishes
+     */
+    "postRushBuild": []
+  },
+
+  /**
+   * Rush can collect anonymous telemetry about everyday developer activity such as
+   * success/failure of installs, builds, and other operations.  You can use this to identify
+   * problems with your toolchain or Rush itself.  THIS TELEMETRY IS NOT SHARED WITH MICROSOFT.
+   * It is written into JSON files in the common/temp folder.  It's up to you to write scripts
+   * that read these JSON files and do something with them.  These scripts are typically registered
+   * in the "eventHooks" section.
+   */
+  // "telemetryEnabled": false,
+
+  /**
+   * Allows creation of hotfix changes. This feature is experimental so it is disabled by default.
+   * If this is set, 'rush change' only allows a 'hotfix' change type to be specified. This change type
+   * will be used when publishing subsequent changes from the monorepo.
+   */
+  // "hotfixChangeEnabled": false,
+
+  /**
+   * (Required) This is the inventory of projects to be managed by Rush.
+   *
+   * Rush does not automatically scan for projects using wildcards, for a few reasons:
+   * 1. Depth-first scans are expensive, particularly when tools need to repeatedly collect the list.
+   * 2. On a caching CI machine, scans can accidentally pick up files left behind from a previous build.
+   * 3. It's useful to have a centralized inventory of all projects and their important metadata.
+   */
+  "projects": [
+    // {
+    //   /**
+    //    * The NPM package name of the project (must match package.json)
+    //    */
+    //   "packageName": "my-app",
+    //
+    //   /**
+    //    * The path to the project folder, relative to the rush.json config file.
+    //    */
+    //   "projectFolder": "apps/my-app",
+    //
+    //   /**
+    //    * An optional category for usage in the "browser-approved-packages.json"
+    //    * and "nonbrowser-approved-packages.json" files.  The value must be one of the
+    //    * strings from the "reviewCategories" defined above.
+    //    */
+    //   "reviewCategory": "production",
+    //
+    //   /**
+    //    * A list of local projects that appear as devDependencies for this project, but cannot be
+    //    * locally linked because it would create a cyclic dependency; instead, the last published
+    //    * version will be installed in the Common folder.
+    //    */
+    //   "cyclicDependencyProjects": [
+    //     // "my-toolchain"
+    //   ],
+    //
+    //   /**
+    //    * If true, then this project will be ignored by the "rush check" command.
+    //    * The default value is false.
+    //    */
+    //   // "skipRushCheck": false,
+    //
+    //   /**
+    //    * A flag indicating that changes to this project will be published to npm, which affects
+    //    * the Rush change and publish workflows. The default value is false.
+    //    * NOTE: "versionPolicyName" and "shouldPublish" are alternatives; you cannot specify them both.
+    //    */
+    //   // "shouldPublish": false,
+    //
+    //   /**
+    //    * Facilitates postprocessing of a project's files prior to publishing.
+    //    *
+    //    * If specified, the "publishFolder" is the relative path to a subfolder of the project folder.
+    //    * The "rush publish" command will publish the subfolder instead of the project folder.  The subfolder
+    //    * must contain its own package.json file, which is typically a build output.
+    //    */
+    //   // "publishFolder": "temp/publish",
+    //
+    //   /**
+    //    * An optional version policy associated with the project.  Version policies are defined
+    //    * in "version-policies.json" file.  See the "rush publish" documentation for more info.
+    //    * NOTE: "versionPolicyName" and "shouldPublish" are alternatives; you cannot specify them both.
+    //    */
+    //   // "versionPolicyName": ""
+    // },
+    //
+    {
+      "packageName": "@opensrcs/club-rig",
+      "projectFolder": "foundations/utils/packages/club-rig",
+      "reviewCategory": "tools",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/ui-test",
+      "projectFolder": "foundations/utils/packages/ui-test",
+      "shouldPublish": false
+    },
+
+    /// CORE Modules
+
+    {
+      "packageName": "@opensrcs/account-client",
+      "projectFolder": "foundations/core/packages/account-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/analytics",
+      "projectFolder": "foundations/core/packages/analytics",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/analytics-service",
+      "projectFolder": "foundations/core/packages/analytics-service",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/api-client",
+      "projectFolder": "foundations/core/packages/api-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/collaborator-client",
+      "projectFolder": "foundations/core/packages/collaborator-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/core",
+      "projectFolder": "foundations/core/packages/core",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/model",
+      "projectFolder": "foundations/core/packages/model",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/club",
+      "projectFolder": "foundations/core/packages/club",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/query",
+      "projectFolder": "foundations/core/packages/query",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/rank",
+      "projectFolder": "foundations/core/packages/rank",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/retry",
+      "projectFolder": "foundations/core/packages/retry",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/storage",
+      "projectFolder": "foundations/core/packages/storage",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/text",
+      "projectFolder": "foundations/core/packages/text",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/text-core",
+      "projectFolder": "foundations/core/packages/text-core",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/text-html",
+      "projectFolder": "foundations/core/packages/text-html",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/text-markdown",
+      "projectFolder": "foundations/core/packages/text-markdown",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/text-ydoc",
+      "projectFolder": "foundations/core/packages/text-ydoc",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/client",
+      "projectFolder": "foundations/core/packages/client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/client-resources",
+      "projectFolder": "foundations/core/packages/client-resources",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/rpc",
+      "projectFolder": "foundations/core/packages/rpc",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/server-token",
+      "projectFolder": "foundations/core/packages/token",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/clublake-client",
+      "projectFolder": "foundations/core/packages/clublake-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/storage-client",
+      "projectFolder": "foundations/core/packages/storage-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/measurements",
+      "projectFolder": "foundations/core/packages/measurements",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/measurements-otlp",
+      "projectFolder": "foundations/core/packages/measurements-otlp",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/postgres-base",
+      "projectFolder": "foundations/core/packages/postgres-base",
+      "shouldPublish": true
+    },
+    // Communication
+    {
+      "packageName": "@opensrcs/communication-types",
+      "projectFolder": "foundations/communication/packages/types",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-sdk-types",
+      "projectFolder": "foundations/communication/packages/sdk-types",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-shared",
+      "projectFolder": "foundations/communication/packages/shared",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-rest-client",
+      "projectFolder": "foundations/communication/packages/rest-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-cockroach",
+      "projectFolder": "foundations/communication/packages/cockroach",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-server",
+      "projectFolder": "foundations/communication/packages/server",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-query",
+      "projectFolder": "foundations/communication/packages/query",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication-client-query",
+      "projectFolder": "foundations/communication/packages/client-query",
+      "shouldPublish": true
+    },
+    /// Server
+
+    {
+      "packageName": "@opensrcs/server-client",
+      "projectFolder": "foundations/server/packages/client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/collaboration",
+      "projectFolder": "foundations/server/packages/collaboration",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/server-core",
+      "projectFolder": "foundations/server/packages/core",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/datalake",
+      "projectFolder": "foundations/server/packages/datalake",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/clublake",
+      "projectFolder": "foundations/server/packages/clublake",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/elastic",
+      "projectFolder": "foundations/server/packages/elastic",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/kafka",
+      "projectFolder": "foundations/server/packages/kafka",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/middleware",
+      "projectFolder": "foundations/server/packages/middleware",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/minio",
+      "projectFolder": "foundations/server/packages/minio",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/mongo",
+      "projectFolder": "foundations/server/packages/mongo",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/postgres",
+      "projectFolder": "foundations/server/packages/postgres",
+      "shouldPublish": true
+    },
+    { "packageName": "@opensrcs/s3", "projectFolder": "foundations/server/packages/s3", "shouldPublish": true },
+    {
+      "packageName": "@opensrcs/server",
+      "projectFolder": "foundations/server/packages/server",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/server-storage",
+      "projectFolder": "foundations/server/packages/server-storage",
+      "shouldPublish": true
+    },
+
+    /// Platform modules
+    {
+      "packageName": "@opensrcs/analytics-providers",
+      "projectFolder": "packages/analytics-providers",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/highlight",
+      "projectFolder": "packages/highlight",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/api-tests",
+      "projectFolder": "ws-tests/api-tests",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/importer",
+      "projectFolder": "packages/importer",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/hls",
+      "projectFolder": "packages/hls",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/theme",
+      "projectFolder": "packages/theme",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/ui",
+      "projectFolder": "packages/ui",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/uploader",
+      "projectFolder": "plugins/uploader",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/uploader-assets",
+      "projectFolder": "plugins/uploader-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/uploader-resources",
+      "projectFolder": "plugins/uploader-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-uploader",
+      "projectFolder": "models/uploader",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/media",
+      "projectFolder": "plugins/media",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/media-resources",
+      "projectFolder": "plugins/media-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/media-assets",
+      "projectFolder": "plugins/media-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-media",
+      "projectFolder": "models/media",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/recorder",
+      "projectFolder": "plugins/recorder",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/recorder-resources",
+      "projectFolder": "plugins/recorder-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/recorder-assets",
+      "projectFolder": "plugins/recorder-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-recorder",
+      "projectFolder": "models/recorder",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/presence",
+      "projectFolder": "plugins/presence",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/presence-resources",
+      "projectFolder": "plugins/presence-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-presence",
+      "projectFolder": "models/presence",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/billing-client",
+      "projectFolder": "packages/billing-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/payment-client",
+      "projectFolder": "packages/payment-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/prod",
+      "projectFolder": "dev/prod",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-indexer",
+      "projectFolder": "server/indexer",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-pipeline",
+      "projectFolder": "server/server-pipeline",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/login",
+      "projectFolder": "plugins/login",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/login-assets",
+      "projectFolder": "plugins/login-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/login-resources",
+      "projectFolder": "plugins/login-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/onboard",
+      "projectFolder": "plugins/onboard",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/onboard-assets",
+      "projectFolder": "plugins/onboard-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/onboard-resources",
+      "projectFolder": "plugins/onboard-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/workbench",
+      "projectFolder": "plugins/workbench",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/workbench-assets",
+      "projectFolder": "plugins/workbench-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/workbench-resources",
+      "projectFolder": "plugins/workbench-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/presentation",
+      "projectFolder": "packages/presentation",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/model-presentation",
+      "projectFolder": "models/presentation",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/view",
+      "projectFolder": "plugins/view",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/view-assets",
+      "projectFolder": "plugins/view-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/view-resources",
+      "projectFolder": "plugins/view-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-core",
+      "projectFolder": "models/core",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-all",
+      "projectFolder": "models/all",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-view",
+      "projectFolder": "models/view",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/contact",
+      "projectFolder": "plugins/contact",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/contact-assets",
+      "projectFolder": "plugins/contact-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/contact-resources",
+      "projectFolder": "plugins/contact-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/task",
+      "projectFolder": "plugins/task",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/task-assets",
+      "projectFolder": "plugins/task-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/task-resources",
+      "projectFolder": "plugins/task-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-workbench",
+      "projectFolder": "models/workbench",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-task",
+      "projectFolder": "models/task",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-contact",
+      "projectFolder": "models/contact",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/text-editor",
+      "projectFolder": "plugins/text-editor",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/text-editor-assets",
+      "projectFolder": "plugins/text-editor-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/text-editor-resources",
+      "projectFolder": "plugins/text-editor-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/chunter",
+      "projectFolder": "plugins/chunter",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/chunter-assets",
+      "projectFolder": "plugins/chunter-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/chunter-resources",
+      "projectFolder": "plugins/chunter-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-chunter",
+      "projectFolder": "models/chunter",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/recruit",
+      "projectFolder": "plugins/recruit",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/recruit-assets",
+      "projectFolder": "plugins/recruit-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/recruit-resources",
+      "projectFolder": "plugins/recruit-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-recruit",
+      "projectFolder": "models/recruit",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/image-cropper",
+      "projectFolder": "plugins/image-cropper",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/image-cropper-resources",
+      "projectFolder": "plugins/image-cropper-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-core",
+      "projectFolder": "models/server-core",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-attachment",
+      "projectFolder": "server-plugins/attachment",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-attachment",
+      "projectFolder": "models/server-attachment",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-attachment-resources",
+      "projectFolder": "server-plugins/attachment-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-collaboration",
+      "projectFolder": "server-plugins/collaboration",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-collaboration",
+      "projectFolder": "models/server-collaboration",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-collaboration-resources",
+      "projectFolder": "server-plugins/collaboration-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-contact",
+      "projectFolder": "server-plugins/contact",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-contact",
+      "projectFolder": "models/server-contact",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-contact-resources",
+      "projectFolder": "server-plugins/contact-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-front",
+      "projectFolder": "pods/front",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-stats",
+      "projectFolder": "pods/stats",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-server",
+      "projectFolder": "pods/server",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-external",
+      "projectFolder": "pods/external",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/front",
+      "projectFolder": "server/front",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/account",
+      "projectFolder": "server/account",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/account-service",
+      "projectFolder": "server/account-service",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/workspace-service",
+      "projectFolder": "server/workspace-service",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/collaborator",
+      "projectFolder": "server/collaborator",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tool",
+      "projectFolder": "dev/tool",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/import-tool",
+      "projectFolder": "dev/import-tool",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-account",
+      "projectFolder": "pods/account",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-workspace",
+      "projectFolder": "pods/workspace",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-collaborator",
+      "projectFolder": "pods/collaborator",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/panel",
+      "projectFolder": "packages/panel",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/activity",
+      "projectFolder": "plugins/activity",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/activity-assets",
+      "projectFolder": "plugins/activity-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/activity-resources",
+      "projectFolder": "plugins/activity-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-activity",
+      "projectFolder": "models/activity",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/setting",
+      "projectFolder": "plugins/setting",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/setting-assets",
+      "projectFolder": "plugins/setting-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/setting-resources",
+      "projectFolder": "plugins/setting-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-setting",
+      "projectFolder": "models/setting",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/telegram",
+      "projectFolder": "plugins/telegram",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/telegram-assets",
+      "projectFolder": "plugins/telegram-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/telegram-resources",
+      "projectFolder": "plugins/telegram-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-telegram",
+      "projectFolder": "models/telegram",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/devmodel-resources",
+      "projectFolder": "plugins/devmodel-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/devmodel",
+      "projectFolder": "plugins/devmodel",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/attachment",
+      "projectFolder": "plugins/attachment",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/attachment-assets",
+      "projectFolder": "plugins/attachment-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/attachment-resources",
+      "projectFolder": "plugins/attachment-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-attachment",
+      "projectFolder": "models/attachment",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/lead",
+      "projectFolder": "plugins/lead",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/lead-assets",
+      "projectFolder": "plugins/lead-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/lead-resources",
+      "projectFolder": "plugins/lead-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-lead",
+      "projectFolder": "models/lead",
+      "shouldPublish": false
+    },
+    // {
+    //   "packageName": "@opensrcs/storybook",
+    //   "projectFolder": "dev/storybook",
+    //   "shouldPublish": false
+    // },
+    {
+      "packageName": "@opensrcs/model-gmail",
+      "projectFolder": "models/gmail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/gmail",
+      "projectFolder": "plugins/gmail",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/gmail-assets",
+      "projectFolder": "plugins/gmail-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/gmail-resources",
+      "projectFolder": "plugins/gmail-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/global-profile",
+      "projectFolder": "plugins/global-profile",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/global-profile-assets",
+      "projectFolder": "plugins/global-profile-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/global-profile-resources",
+      "projectFolder": "plugins/global-profile-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-inventory",
+      "projectFolder": "models/inventory",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/inventory",
+      "projectFolder": "plugins/inventory",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/inventory-assets",
+      "projectFolder": "plugins/inventory-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/inventory-resources",
+      "projectFolder": "plugins/inventory-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/templates",
+      "projectFolder": "plugins/templates",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/templates-assets",
+      "projectFolder": "plugins/templates-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/templates-resources",
+      "projectFolder": "plugins/templates-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-templates",
+      "projectFolder": "models/templates",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-templates",
+      "projectFolder": "server-plugins/templates",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-templates",
+      "projectFolder": "models/server-templates",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-text-editor",
+      "projectFolder": "models/text-editor",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-tool",
+      "projectFolder": "server/tool",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tests-sanity",
+      "projectFolder": "tests/sanity",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tests-ws-sanity",
+      "projectFolder": "ws-tests/sanity",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/rekoni",
+      "projectFolder": "packages/rekoni",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-notification",
+      "projectFolder": "models/notification",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/notification",
+      "projectFolder": "plugins/notification",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/notification-assets",
+      "projectFolder": "plugins/notification-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/notification-resources",
+      "projectFolder": "plugins/notification-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-notification",
+      "projectFolder": "server-plugins/notification",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-notification",
+      "projectFolder": "models/server-notification",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-notification-resources",
+      "projectFolder": "server-plugins/notification-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tags",
+      "projectFolder": "plugins/tags",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/tags-assets",
+      "projectFolder": "plugins/tags-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tags-resources",
+      "projectFolder": "plugins/tags-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-tags",
+      "projectFolder": "models/tags",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-chunter",
+      "projectFolder": "server-plugins/chunter",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-chunter",
+      "projectFolder": "models/server-chunter",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-chunter-resources",
+      "projectFolder": "server-plugins/chunter-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-inventory",
+      "projectFolder": "server-plugins/inventory",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-inventory",
+      "projectFolder": "models/server-inventory",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-inventory-resources",
+      "projectFolder": "server-plugins/inventory-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-lead",
+      "projectFolder": "server-plugins/lead",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-lead",
+      "projectFolder": "models/server-lead",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-lead-resources",
+      "projectFolder": "server-plugins/lead-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-recruit",
+      "projectFolder": "server-plugins/recruit",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-recruit",
+      "projectFolder": "models/server-recruit",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-recruit-resources",
+      "projectFolder": "server-plugins/recruit-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-task",
+      "projectFolder": "server-plugins/task",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-task",
+      "projectFolder": "models/server-task",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-tracker",
+      "projectFolder": "server-plugins/tracker",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-tracker",
+      "projectFolder": "models/server-tracker",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-tracker-resources",
+      "projectFolder": "server-plugins/tracker-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-task-resources",
+      "projectFolder": "server-plugins/task-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-setting",
+      "projectFolder": "server-plugins/setting",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-setting",
+      "projectFolder": "models/server-setting",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-setting-resources",
+      "projectFolder": "server-plugins/setting-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/calendar",
+      "projectFolder": "plugins/calendar",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/calendar-assets",
+      "projectFolder": "plugins/calendar-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/calendar-resources",
+      "projectFolder": "plugins/calendar-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-calendar",
+      "projectFolder": "models/calendar",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-tags",
+      "projectFolder": "server-plugins/tags",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-tags",
+      "projectFolder": "models/server-tags",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-tags-resources",
+      "projectFolder": "server-plugins/tags-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-calendar",
+      "projectFolder": "server-plugins/calendar",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-calendar",
+      "projectFolder": "models/server-calendar",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-calendar-resources",
+      "projectFolder": "server-plugins/calendar-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-gmail",
+      "projectFolder": "server-plugins/gmail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-gmail",
+      "projectFolder": "models/server-gmail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-gmail-resources",
+      "projectFolder": "server-plugins/gmail-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-telegram",
+      "projectFolder": "server-plugins/telegram",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-telegram",
+      "projectFolder": "models/server-telegram",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-telegram-resources",
+      "projectFolder": "server-plugins/telegram-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tracker",
+      "projectFolder": "plugins/tracker",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/tracker-assets",
+      "projectFolder": "plugins/tracker-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/tracker-resources",
+      "projectFolder": "plugins/tracker-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-tracker",
+      "projectFolder": "models/tracker",
+      "shouldPublish": false
+    },
+
+    {
+      "packageName": "@opensrcs/board",
+      "projectFolder": "plugins/board",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/board-assets",
+      "projectFolder": "plugins/board-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/board-resources",
+      "projectFolder": "plugins/board-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-board",
+      "projectFolder": "models/board",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/kanban",
+      "projectFolder": "packages/kanban",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/preference",
+      "projectFolder": "plugins/preference",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/preference-assets",
+      "projectFolder": "plugins/preference-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-preference",
+      "projectFolder": "models/preference",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-preference",
+      "projectFolder": "server-plugins/preference",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-backup",
+      "projectFolder": "server/backup",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/backup-service",
+      "projectFolder": "server/backup-service",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-backup",
+      "projectFolder": "pods/backup",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-fulltext",
+      "projectFolder": "pods/fulltext",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-media",
+      "projectFolder": "pods/media",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-preview",
+      "projectFolder": "pods/preview",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-link-preview",
+      "projectFolder": "pods/link-preview",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/hr",
+      "projectFolder": "plugins/hr",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/hr-assets",
+      "projectFolder": "plugins/hr-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/hr-resources",
+      "projectFolder": "plugins/hr-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-hr",
+      "projectFolder": "models/hr",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-hr",
+      "projectFolder": "server-plugins/hr",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-hr",
+      "projectFolder": "models/server-hr",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-hr-resources",
+      "projectFolder": "server-plugins/hr-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/bitrix",
+      "projectFolder": "plugins/bitrix",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/bitrix-assets",
+      "projectFolder": "plugins/bitrix-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/bitrix-resources",
+      "projectFolder": "plugins/bitrix-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-bitrix",
+      "projectFolder": "models/bitrix",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/request",
+      "projectFolder": "plugins/request",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/request-assets",
+      "projectFolder": "plugins/request-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/request-resources",
+      "projectFolder": "plugins/request-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-request",
+      "projectFolder": "models/request",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-request",
+      "projectFolder": "server-plugins/request",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-request",
+      "projectFolder": "models/server-request",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-request-resources",
+      "projectFolder": "server-plugins/request-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-view",
+      "projectFolder": "server-plugins/view",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-view",
+      "projectFolder": "models/server-view",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-view-resources",
+      "projectFolder": "server-plugins/view-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-activity",
+      "projectFolder": "server-plugins/activity",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-activity",
+      "projectFolder": "models/server-activity",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-activity-resources",
+      "projectFolder": "server-plugins/activity-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-support",
+      "projectFolder": "models/support",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/support",
+      "projectFolder": "plugins/support",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/support-assets",
+      "projectFolder": "plugins/support-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/support-resources",
+      "projectFolder": "plugins/support-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/guest",
+      "projectFolder": "plugins/guest",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/guest-assets",
+      "projectFolder": "plugins/guest-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/guest-resources",
+      "projectFolder": "plugins/guest-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-guest",
+      "projectFolder": "models/guest",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-guest",
+      "projectFolder": "server-plugins/guest",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-guest",
+      "projectFolder": "models/server-guest",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-guest-resources",
+      "projectFolder": "server-plugins/guest-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/auth-providers",
+      "projectFolder": "pods/authProviders",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/time",
+      "projectFolder": "plugins/time",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/time-assets",
+      "projectFolder": "plugins/time-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/time-resources",
+      "projectFolder": "plugins/time-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-time",
+      "projectFolder": "models/time",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-time",
+      "projectFolder": "server-plugins/time",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-time-resources",
+      "projectFolder": "server-plugins/time-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-time",
+      "projectFolder": "models/server-time",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/document",
+      "projectFolder": "plugins/document",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/document-assets",
+      "projectFolder": "plugins/document-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/document-resources",
+      "projectFolder": "plugins/document-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-document",
+      "projectFolder": "models/document",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-document",
+      "projectFolder": "server-plugins/document",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-document-resources",
+      "projectFolder": "server-plugins/document-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-document",
+      "projectFolder": "models/server-document",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/love",
+      "projectFolder": "plugins/love",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/love-assets",
+      "projectFolder": "plugins/love-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/love-resources",
+      "projectFolder": "plugins/love-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-love",
+      "projectFolder": "models/love",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-love",
+      "projectFolder": "server-plugins/love",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-love-resources",
+      "projectFolder": "server-plugins/love-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-love",
+      "projectFolder": "models/server-love",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/drive",
+      "projectFolder": "plugins/drive",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/drive-assets",
+      "projectFolder": "plugins/drive-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/drive-resources",
+      "projectFolder": "plugins/drive-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-drive",
+      "projectFolder": "models/drive",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-drive",
+      "projectFolder": "server-plugins/drive",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-drive",
+      "projectFolder": "models/server-drive",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-drive-resources",
+      "projectFolder": "server-plugins/drive-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/controlled-documents",
+      "projectFolder": "plugins/controlled-documents",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/controlled-documents-assets",
+      "projectFolder": "plugins/controlled-documents-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/controlled-documents-resources",
+      "projectFolder": "plugins/controlled-documents-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/converter",
+      "projectFolder": "plugins/converter",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/converter-resources",
+      "projectFolder": "plugins/converter-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-converter",
+      "projectFolder": "models/converter",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-controlled-documents",
+      "projectFolder": "models/controlled-documents",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-controlled-documents",
+      "projectFolder": "server-plugins/controlled-documents",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-controlled-documents-resources",
+      "projectFolder": "server-plugins/controlled-documents-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-controlled-documents",
+      "projectFolder": "models/server-controlled-documents",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/print",
+      "projectFolder": "plugins/print",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/print-assets",
+      "projectFolder": "plugins/print-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/print-resources",
+      "projectFolder": "plugins/print-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-print",
+      "projectFolder": "models/print",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-export",
+      "projectFolder": "models/export",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/export",
+      "projectFolder": "plugins/export",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/export-assets",
+      "projectFolder": "plugins/export-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/export-resources",
+      "projectFolder": "plugins/export-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/sign",
+      "projectFolder": "plugins/sign",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/products",
+      "projectFolder": "plugins/products",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/products-assets",
+      "projectFolder": "plugins/products-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/products-resources",
+      "projectFolder": "plugins/products-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-products",
+      "projectFolder": "models/products",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-products",
+      "projectFolder": "models/server-products",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/questions",
+      "projectFolder": "plugins/questions",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/questions-assets",
+      "projectFolder": "plugins/questions-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/questions-resources",
+      "projectFolder": "plugins/questions-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-questions",
+      "projectFolder": "models/questions",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/training",
+      "projectFolder": "plugins/training",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/training-assets",
+      "projectFolder": "plugins/training-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/training-resources",
+      "projectFolder": "plugins/training-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-training",
+      "projectFolder": "server-plugins/training",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-training-resources",
+      "projectFolder": "server-plugins/training-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-training",
+      "projectFolder": "models/training",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-training",
+      "projectFolder": "models/server-training",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop",
+      "projectFolder": "desktop",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "desktop",
+      "projectFolder": "desktop-package",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/diffview",
+      "projectFolder": "plugins/diffview",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/diffview-assets",
+      "projectFolder": "plugins/diffview-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/diffview-resources",
+      "projectFolder": "plugins/diffview-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/github",
+      "projectFolder": "services/github/github",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/github-assets",
+      "projectFolder": "services/github/github-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/github-resources",
+      "projectFolder": "services/github/github-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-github",
+      "projectFolder": "services/github/model-github",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-github",
+      "projectFolder": "services/github/pod-github",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-github",
+      "projectFolder": "services/github/server-github",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-github-resources",
+      "projectFolder": "services/github/server-github-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-github-model",
+      "projectFolder": "services/github/server-github-model",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-preferences",
+      "projectFolder": "plugins/desktop-preferences",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-preferences-assets",
+      "projectFolder": "plugins/desktop-preferences-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-preferences-resources",
+      "projectFolder": "plugins/desktop-preferences-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-desktop-preferences",
+      "projectFolder": "models/desktop-preferences",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-downloads",
+      "projectFolder": "plugins/desktop-downloads",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-downloads-assets",
+      "projectFolder": "plugins/desktop-downloads-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/desktop-downloads-resources",
+      "projectFolder": "plugins/desktop-downloads-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-desktop-downloads",
+      "projectFolder": "models/desktop-downloads",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-notification",
+      "projectFolder": "services/notification/pod-notification",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-events-processor",
+      "projectFolder": "services/notification/pod-events-processor",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-telegram",
+      "projectFolder": "services/telegram/pod-telegram",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-gmail",
+      "projectFolder": "services/gmail/pod-gmail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-calendar",
+      "projectFolder": "services/calendar/pod-calendar",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-calendar-mailer",
+      "projectFolder": "services/calendar/pod-calendar-mailer",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-datalake",
+      "projectFolder": "services/datalake/pod-datalake",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-billing",
+      "projectFolder": "services/billing/pod-billing",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-payment",
+      "projectFolder": "services/payment/pod-payment",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-love",
+      "projectFolder": "services/love",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-print",
+      "projectFolder": "services/print/pod-print",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-export",
+      "projectFolder": "services/export/pod-export",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-sign",
+      "projectFolder": "services/sign/pod-sign",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/rekoni-service",
+      "projectFolder": "services/rekoni",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-analytics-collector",
+      "projectFolder": "services/analytics-collector/pod-analytics-collector",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/analytics-collector",
+      "projectFolder": "plugins/analytics-collector",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/analytics-collector-assets",
+      "projectFolder": "plugins/analytics-collector-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/analytics-collector-resources",
+      "projectFolder": "plugins/analytics-collector-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-analytics-collector",
+      "projectFolder": "models/analytics-collector",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-analytics-collector",
+      "projectFolder": "server-plugins/analytics-collector",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-analytics-collector-resources",
+      "projectFolder": "server-plugins/analytics-collector-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-ai-bot",
+      "projectFolder": "services/ai-bot/pod-ai-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/ai-bot",
+      "projectFolder": "plugins/ai-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/ai-bot-resources",
+      "projectFolder": "plugins/ai-bot-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-ai-bot",
+      "projectFolder": "models/ai-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-ai-bot",
+      "projectFolder": "models/server-ai-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-ai-bot",
+      "projectFolder": "server-plugins/ai-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-ai-bot-resources",
+      "projectFolder": "server-plugins/ai-bot-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-telegram-bot",
+      "projectFolder": "services/telegram-bot/pod-telegram-bot",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/openai",
+      "projectFolder": "plugins/openai",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/scripts",
+      "projectFolder": "common/scripts",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-test-management",
+      "projectFolder": "models/test-management",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/test-management",
+      "projectFolder": "plugins/test-management",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/test-management-resources",
+      "projectFolder": "plugins/test-management-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/test-management-assets",
+      "projectFolder": "plugins/test-management-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/survey",
+      "projectFolder": "plugins/survey",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/model-survey",
+      "projectFolder": "models/survey",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/survey-assets",
+      "projectFolder": "plugins/survey-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/survey-resources",
+      "projectFolder": "plugins/survey-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/card",
+      "projectFolder": "plugins/card",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/model-card",
+      "projectFolder": "models/card",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/card-assets",
+      "projectFolder": "plugins/card-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/card-resources",
+      "projectFolder": "plugins/card-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-card",
+      "projectFolder": "server-plugins/card",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-card-resources",
+      "projectFolder": "server-plugins/card-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-card",
+      "projectFolder": "models/server-card",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/mail",
+      "projectFolder": "plugins/mail",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/model-mail",
+      "projectFolder": "models/mail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/mail-assets",
+      "projectFolder": "plugins/mail-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-mail",
+      "projectFolder": "services/mail/pod-mail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/chat",
+      "projectFolder": "plugins/chat",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/chat-assets",
+      "projectFolder": "plugins/chat-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/chat-resources",
+      "projectFolder": "plugins/chat-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-chat",
+      "projectFolder": "models/chat",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/process",
+      "projectFolder": "plugins/process",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/process-assets",
+      "projectFolder": "plugins/process-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/process-resources",
+      "projectFolder": "plugins/process-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-process",
+      "projectFolder": "models/process",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-process",
+      "projectFolder": "server-plugins/process",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-server-process",
+      "projectFolder": "models/server-process",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-process-resources",
+      "projectFolder": "server-plugins/process-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/inbox",
+      "projectFolder": "plugins/inbox",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/inbox-assets",
+      "projectFolder": "plugins/inbox-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/inbox-resources",
+      "projectFolder": "plugins/inbox-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-inbox",
+      "projectFolder": "models/inbox",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-mail-worker",
+      "projectFolder": "services/mail/pod-mail-worker",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/achievement",
+      "projectFolder": "plugins/achievement",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/achievement-assets",
+      "projectFolder": "plugins/achievement-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/achievement-resources",
+      "projectFolder": "plugins/achievement-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-achievement",
+      "projectFolder": "models/achievement",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/kvs-client",
+      "projectFolder": "packages/kvs-client",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/clubpulse-client",
+      "projectFolder": "packages/clubpulse-client",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/communication",
+      "projectFolder": "plugins/communication",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/communication-assets",
+      "projectFolder": "plugins/communication-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/communication-resources",
+      "projectFolder": "plugins/communication-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-communication",
+      "projectFolder": "models/communication",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/mail-common",
+      "projectFolder": "services/mail/mail-common",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/emoji",
+      "projectFolder": "plugins/emoji",
+      "shouldPublish": true
+    },
+    {
+      "packageName": "@opensrcs/emoji-assets",
+      "projectFolder": "plugins/emoji-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/emoji-resources",
+      "projectFolder": "plugins/emoji-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-emoji",
+      "projectFolder": "models/emoji",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/backup-api-pod",
+      "projectFolder": "services/backup/backup-api-pod",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/billing",
+      "projectFolder": "plugins/billing",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/billing-assets",
+      "projectFolder": "plugins/billing-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/billing-resources",
+      "projectFolder": "plugins/billing-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-billing",
+      "projectFolder": "models/billing",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-process",
+      "projectFolder": "services/process",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/integration-client",
+      "projectFolder": "packages/integration-client",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-club-mail",
+      "projectFolder": "models/club-mail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/club-mail",
+      "projectFolder": "plugins/club-mail",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/club-mail-assets",
+      "projectFolder": "plugins/club-mail-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/club-mail-resources",
+      "projectFolder": "plugins/club-mail-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-ai-assistant",
+      "projectFolder": "models/ai-assistant",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/ai-assistant",
+      "projectFolder": "plugins/ai-assistant",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/ai-assistant-assets",
+      "projectFolder": "plugins/ai-assistant-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/ai-assistant-resources",
+      "projectFolder": "plugins/ai-assistant-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-worker",
+      "projectFolder": "services/worker",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-translate",
+      "projectFolder": "services/translate",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/rating",
+      "projectFolder": "plugins/rating",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/rating-assets",
+      "projectFolder": "plugins/rating-assets",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/rating-resources",
+      "projectFolder": "plugins/rating-resources",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/server-rating",
+      "projectFolder": "server-plugins/rating",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/model-rating",
+      "projectFolder": "models/rating",
+      "shouldPublish": false
+    },
+    {
+      "packageName": "@opensrcs/pod-rating",
+      "projectFolder": "services/rating",
+      "shouldPublish": false
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+<!--
+// Copyright © 2026 OpenSrcs.
+//
+// Licensed under the Eclipse Public License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License. You may
+// obtain a copy of the License at https://www.eclipse.org/legal/epl-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//
+// See the License for the specific language governing permissions and
+// limitations under the License.
+-->
+
+<script lang="ts">
+  import cardPlugin, { Card, MasterTag } from '@opensrcs/card'
+  import { Ref } from '@opensrcs/core'
+  import { SubscriptionLabelID } from '@opensrcs/communication-types'
+  import chat, { chatId } from '@opensrcs/chat'
+  import { Navigator } from '@opensrcs/card-resources'
+  import communication from '@opensrcs/communication'
+  import { NavGroup } from '@opensrcs/ui'
+  import { createEventDispatcher } from 'svelte'
+
+  export let card: Card | undefined = undefined
+  export let type: Ref<MasterTag> | undefined = undefined
+  export let special: 'favorites' | 'all' | string | undefined = undefined
+
+  const dispatch = createEventDispatcher()
+
+  function getSpecial (special: 'favorites' | string | undefined): string | undefined {
+    if (special === 'favorites') {
+      return 'favorites'
+    }
+    return undefined
+  }
+
+  function handleAllUpdatesClick (): void {
+    dispatch('selectAll')
+  }
+</script>
+
+<div class="navigation-section">
+  <NavGroup
+    _id="all"
+    categoryName="all"
+    type="selectable-header"
+    icon={chat.icon.All}
+    label={chat.string.All}
+    empty={true}
+    selected={special === 'all'}
+    noDivider
+    on:click={handleAllUpdatesClick}
+  />
+</div>
+<Navigator
+  config={{
+    variant: 'cards',
+    types: [cardPlugin.class.Card],
+    savedViews: true,
+    groupBySpace: false,
+    hideEmpty: true,
+    limit: 5,
+    labelFilter: [SubscriptionLabelID],
+    preorder: [
+      { type: chat.masterTag.Thread, order: 1 },
+      { type: communication.type.Direct, order: 2 }
+    ],
+    fixedTypes: [chat.masterTag.Thread, communication.type.Direct],
+    allowCreate: true,
+    defaultSorting: 'recent',
+    lookback: '2w',
+    showTypeIcon: false,
+    showCardIcon: true
+  }}
+  applicationId={chatId}
+  selectedType={type}
+  selectedCard={card?._id}
+  selectedSpecial={getSpecial(special)}
+  on:selectType
+  on:selectCard
+  on:favorites
+/>
+
+<style lang="scss">
+  .navigation-section {
+    display: flex;
+    padding-top: 1rem;
+    margin-bottom: -0.5rem;
+  }
+</style>

@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/core",
+      "comment": "Add workspace permission enum",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@opensrcs/core"
+}

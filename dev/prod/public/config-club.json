@@ -1,0 +1,23 @@
+{
+  "ACCOUNTS_URL": "https://account.club.app/",
+  "UPLOAD_URL": "/files",
+  "FILES_URL": "/files/:workspace/:filename?file=:blobId&workspace=:workspace",
+  "REKONI_URL": "https://rekoni.club.app",
+  "TELEGRAM_URL": "https://telegram.club.app",
+  "GMAIL_URL": "https://gmail.club.app/",
+  "CALENDAR_URL": "https://calendar.club.app/",
+  "COLLABORATOR_URL": "wss://collaborator.club.app",
+  "BRANDING_URL": "https://club.opensrcs.org/club-branding_v2.json",
+  "GITHUB_APP": "club-for-github",
+  "GITHUB_CLIENTID": "Iv1.e263a087de0910e0",
+  "INTERCOM_APP_ID": "",
+  "INTERCOM_API_URL": "",
+  "GITHUB_URL": "https://github.club.app",
+  "LIVEKIT_WS": "",
+  "LOVE_ENDPOINT": "https://love.club.app/",
+  "SIGN_URL": "https://sign.club.app",
+  "PRINT_URL": "https://print.club.app",
+  "DESKTOP_UPDATES_CHANNEL": "club",
+  "TELEGRAM_BOT_URL": "https://telegram-bot.club.app",
+  "STATS_URL": "https://stats.club.app"
+}

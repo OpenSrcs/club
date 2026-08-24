@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/network-client",
+      "comment": "renamings",
+      "type": "none"
+    }
+  ],
+  "packageName": "@opensrcs/network-client"
+}
