@@ -14,14 +14,23 @@
 #   POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET, POLAR_ORGANIZATION_ID,
 #   POLAR_SUBSCRIPTION_PLANS
 #   STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_SUBSCRIPTION_PLANS
-# All are optional — without them the service starts in sandbox mode.
+#   PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET, PADDLE_SUBSCRIPTION_PLANS
+#
+# Exactly one provider is used. The service tries Polar, then Stripe, then
+# Paddle, and takes the first one whose full credential set is present.
+#
+# `payment` REQUIRES one complete provider set - it throws "Payment provider is
+# not configured" and crash-loops otherwise, and USE_SANDBOX does not substitute
+# for one (it only selects Polar's sandbox mode). So it sits behind the
+# `payment` profile:
+#     docker compose ... --profile payment up -d
+# `billing` has no such requirement and starts unconditionally with this overlay.
 
 services:
   payment:
     image: opensrcs/payment
-    # Clear the profile gate from docker-compose.min.yaml so the service starts
-    # whenever this overlay is included, even alongside `min`.
-    profiles: !override []
+    # Needs a full Stripe or Polar credential set to boot - see the note above.
+    profiles: !override ['payment']
     extra_hosts:
       - 'club.local:host-gateway'
     depends_on:
@@ -41,9 +50,17 @@ services:
       # - POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-}
       # - POLAR_ORGANIZATION_ID=${POLAR_ORGANIZATION_ID:-}
       # - POLAR_SUBSCRIPTION_PLANS=${POLAR_SUBSCRIPTION_PLANS:-}
-      - STRIPE_API_KEY=${STRIPE_API_KEY:-}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
-      - STRIPE_SUBSCRIPTION_PLANS=${STRIPE_SUBSCRIPTION_PLANS:-}
+      - STRIPE_API_KEY
+      - STRIPE_WEBHOOK_SECRET
+      - STRIPE_SUBSCRIPTION_PLANS
+      # Paddle Billing. PADDLE_SUBSCRIPTION_PLANS maps club plans to Paddle
+      # price ids, same "plan@type:priceId;..." format as the other providers.
+      - PADDLE_API_KEY
+      - PADDLE_WEBHOOK_SECRET
+      - PADDLE_SUBSCRIPTION_PLANS
+      # 'next_billing_period' (default) keeps uncancel working; 'immediately'
+      # cancels and refunds at once but makes uncancel impossible.
+      - PADDLE_CANCEL_EFFECTIVE_FROM=${PADDLE_CANCEL_EFFECTIVE_FROM:-next_billing_period}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
     restart: unless-stopped
 

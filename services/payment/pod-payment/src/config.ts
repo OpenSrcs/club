@@ -34,6 +34,13 @@ export interface Config {
   StripeWebhookSecret?: string
   StripeSubscriptionPlans?: string
 
+  // Paddle Billing configuration
+  PaddleApiKey?: string
+  PaddleWebhookSecret?: string
+  PaddleSubscriptionPlans?: string
+  // 'immediately' | 'next_billing_period' - see PaddleProvider for the trade-off
+  PaddleCancelEffectiveFrom?: string
+
   ReconciliationIntervalMinutes?: number
 }
 
@@ -53,6 +60,10 @@ const config: Config = (() => {
     StripeApiKey: process.env.STRIPE_API_KEY,
     StripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     StripeSubscriptionPlans: process.env.STRIPE_SUBSCRIPTION_PLANS,
+    PaddleApiKey: process.env.PADDLE_API_KEY,
+    PaddleWebhookSecret: process.env.PADDLE_WEBHOOK_SECRET,
+    PaddleSubscriptionPlans: process.env.PADDLE_SUBSCRIPTION_PLANS,
+    PaddleCancelEffectiveFrom: process.env.PADDLE_CANCEL_EFFECTIVE_FROM,
     ReconciliationIntervalMinutes: parseNumber(process.env.RECONCILIATION_INTERVAL_MINUTES)
   }
 

@@ -3,10 +3,13 @@
 #   rush docker --minified   or   rush docker:min
 
 MINIFIED=false
+FULL=false
 for arg in "$@"; do
   if [ "$arg" = "--minified" ]; then
     MINIFIED=true
-    break
+  fi
+  if [ "$arg" = "--full" ]; then
+    FULL=true
   fi
 done
 
@@ -60,4 +63,18 @@ else
     --to @opensrcs/pod-payment \
     --to @opensrcs/pod-worker \
     --to @opensrcs/pod-events-processor
+fi
+
+# The integrations that docker-compose.full.yaml wires up are not part of the
+# default image set, so `rush docker:build` alone leaves them missing.
+if [ "$FULL" = true ]; then
+  echo "Building integration images for the full stack..."
+  rush docker:build -p 20 \
+    --to @opensrcs/pod-gmail \
+    --to @opensrcs/pod-calendar \
+    --to @opensrcs/pod-calendar-mailer \
+    --to @opensrcs/pod-github \
+    --to @opensrcs/pod-telegram-bot \
+    --to @opensrcs/pod-notification \
+    --to @opensrcs/pod-translate
 fi

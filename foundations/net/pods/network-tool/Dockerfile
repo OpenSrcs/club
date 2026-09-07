@@ -1,4 +1,4 @@
-FROM opensrcs/base-slim:v20250915
+FROM opensrcs/base-slim:v20250916
 
 WORKDIR /usr/src/app
 

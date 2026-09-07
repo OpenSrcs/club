@@ -167,6 +167,38 @@ export async function createServer (ctx: MeasureContext, config: Config): Promis
     }
   }
 
+  // Try Paddle if neither Polar nor Stripe is configured
+  if (
+    provider == null &&
+    config.PaddleApiKey !== undefined &&
+    config.PaddleWebhookSecret !== undefined &&
+    config.PaddleSubscriptionPlans !== undefined
+  ) {
+    try {
+      provider = PaymentProviderFactory.getInstance().create(
+        'paddle',
+        {
+          apiKey: config.PaddleApiKey,
+          webhookSecret: config.PaddleWebhookSecret,
+          subscriptionPlans: config.PaddleSubscriptionPlans,
+          frontUrl: config.FrontUrl,
+          cancelEffectiveFrom: config.PaddleCancelEffectiveFrom
+        },
+        accountClient,
+        config.UseSandbox
+      )
+
+      if (provider !== undefined) {
+        // Register provider-specific endpoints (e.g., webhooks)
+        provider.registerWebhookEndpoints(app, ctx, config.AccountsUrl, serviceToken)
+
+        ctx.info('Paddle payment provider initialized successfully')
+      }
+    } catch (err) {
+      ctx.error('Failed to initialize payment provider Paddle', { err })
+    }
+  }
+
   if (provider == null) {
     throw new Error('Payment provider is not configured. Please provide payment provider configuration.')
   }

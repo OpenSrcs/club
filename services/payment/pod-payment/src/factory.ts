@@ -17,10 +17,11 @@ import { type AccountClient } from '@opensrcs/account-client'
 import type { PaymentProvider } from './providers'
 import { PolarProvider } from './providers/polar/provider'
 import { StripeProvider } from './providers/stripe/provider'
+import { PaddleProvider, type CancelEffectiveFrom } from './providers/paddle/provider'
 
 /**
  * Static singleton factory for creating payment providers
- * Can support multiple payment providers (Polar, Stripe, etc.)
+ * Can support multiple payment providers (Polar, Stripe, Paddle, etc.)
  */
 export class PaymentProviderFactory {
   private static instance: PaymentProviderFactory
@@ -50,6 +51,8 @@ export class PaymentProviderFactory {
         return this.createPolarProvider(config, accountClient, useSandbox)
       case 'stripe':
         return this.createStripeProvider(config, accountClient)
+      case 'paddle':
+        return this.createPaddleProvider(config, accountClient, useSandbox)
       default:
         return undefined
     }
@@ -80,6 +83,35 @@ export class PaymentProviderFactory {
       config.frontUrl,
       accountClient,
       useSandbox
+    )
+  }
+
+  private createPaddleProvider (
+    config: Record<string, any>,
+    accountClient: AccountClient,
+    useSandbox = false
+  ): PaymentProvider {
+    if (config.apiKey === undefined) {
+      throw new Error('Paddle provider requires apiKey in config')
+    }
+    if (config.webhookSecret === undefined) {
+      throw new Error('Paddle provider requires webhookSecret in config')
+    }
+    if (config.subscriptionPlans === undefined) {
+      throw new Error('Paddle provider requires subscriptionPlans in config')
+    }
+    if (config.frontUrl === undefined) {
+      throw new Error('Paddle provider requires frontUrl in config')
+    }
+
+    return new PaddleProvider(
+      config.apiKey,
+      config.webhookSecret,
+      config.subscriptionPlans,
+      config.frontUrl,
+      accountClient,
+      useSandbox,
+      config.cancelEffectiveFrom as CancelEffectiveFrom | undefined
     )
   }
 

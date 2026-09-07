@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@opensrcs/communication-server",
+      "comment": "update deps",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@opensrcs/communication-server"
+}

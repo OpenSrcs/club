@@ -1,0 +1,442 @@
+# Full overlay: everything in the base stack PLUS every optional service that the
+# base docker-compose.yaml leaves out or comments out.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.ext.yaml -f docker-compose.full.yaml up -d
+#   (or: rush docker:up:full)
+#
+# Two tiers of service live in here.
+#
+# TIER 1 - starts with no third-party credentials. Anything these services need
+# is provided locally by a companion container:
+#   mongodb   -> ai-bot's own document store
+#   mailpit   -> a local SMTP sink, so `mail` and `calendar-mailer` deliver for
+#                real and you read the results at http://localhost:8025
+#   livekit   -> a dev LiveKit server, so `love` (virtual office) has an SFU
+# Services: ai-bot, love, mail, mail-worker, notification, calendar,
+# calendar-mailer. (calendar and calendar-mailer need Google credentials only
+# for per-user integrations, not to start - unlike gmail, which parses a
+# required Credentials JSON blob at boot.)
+#
+# TIER 2 - hard-fails at startup when its credentials are missing. Their config
+# modules validate every key and `throw`, so leaving them enabled with blank env
+# produces a crash-loop, not a degraded service. These are behind compose
+# profiles and stay down until you opt in:
+#   --profile google    gmail                              (GMAIL_CREDENTIALS)
+#   --profile github    github                             (GITHUB_APP_*)
+#   --profile telegram  telegram-bot                       (TELEGRAM_BOT_TOKEN)
+#   --profile ai        translate, club-ai-agent           (OPENAI_API_KEY / AGENT_*)
+#
+# Telegram is served by the Rust `clubgram` bridge in the base compose. The old
+# TypeScript `services/telegram/pod-telegram` was removed - it served nothing (its
+# entire route table was commented out behind a TODO) and the client talks to
+# clubgram's `api/integrations/*` routes. `telegram-bot` below is a separate
+# service: the notification bot, not the account bridge.
+
+services:
+  # ── Tier-1 support containers ────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    extra_hosts:
+      - 'club.local:host-gateway'
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Local SMTP sink. `mail` refuses to boot without SMTP_HOST/SMTP_PORT, so this
+  # gives the mail path a real server to talk to. Web UI on :8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    extra_hosts:
+      - 'club.local:host-gateway'
+    ports:
+      - 1025:1025
+      - 8025:8025
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    restart: unless-stopped
+
+  # Dev SFU for `love`. Keys are dev-only placeholders and match LIVEKIT_* below.
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    command: --dev --bind 0.0.0.0
+    extra_hosts:
+      - 'club.local:host-gateway'
+    ports:
+      - 7880:7880
+      - 7881:7881
+    environment:
+      - 'LIVEKIT_KEYS=devkey: devsecretdevsecretdevsecretdevsecret'
+    restart: unless-stopped
+
+  # ── Tier 1: always-on optional services ──────────────────────────────────
+  ai-bot:
+    image: opensrcs/ai-bot
+    container_name: ai-bot
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      account:
+        condition: service_started
+    ports:
+      - 4010:4010
+    environment:
+      - PORT=4010
+      - SERVER_SECRET=secret
+      - SERVICE_ID=ai-bot-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - STORAGE_CONFIG=${STORAGE_CONFIG}
+      - MONGO_URL=mongodb://mongodb:27017
+      - CONFIGURATION_DB=%ai-bot
+      - FIRST_NAME=Jolie
+      - LAST_NAME=AI
+      - PASSWORD=password
+      - AVATAR_PATH=./assets/avatar.png
+      - AVATAR_CONTENT_TYPE=image/png
+      - STATS_URL=http://club.local:4900
+      - LOVE_ENDPOINT=http://club.local:8097
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      # Optional - the bot boots without these, it just cannot answer.
+      - OPENAI_API_KEY
+      - OPENAI_BASE_URL
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - DATALAB_API_KEY
+      - DEEPGRAM_API_KEY
+      - DEEPGRAM_PROJECT_ID
+    restart: unless-stopped
+
+  # Virtual office. Port 8097, NOT the config default of 8096 - clublake owns
+  # 8096 in the base compose.
+  love:
+    image: opensrcs/love
+    container_name: love
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      livekit:
+        condition: service_started
+      account:
+        condition: service_started
+    ports:
+      - 8097:8097
+    environment:
+      - PORT=8097
+      - SECRET=secret
+      - SERVICE_ID=love-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - STORAGE_CONFIG=${STORAGE_CONFIG}
+      - STORAGE_PROVIDER_NAME=datalake
+      - LIVEKIT_HOST=${LIVEKIT_HOST:-http://club.local:7880}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-devsecretdevsecretdevsecretdevsecret}
+      - RECORDING_PRESET=720p
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  mail:
+    image: opensrcs/mail
+    container_name: mail
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      mailpit:
+        condition: service_started
+    ports:
+      - 4021:4021
+    environment:
+      - PORT=4021
+      - SOURCE=club <noreply@club.local>
+      # Defaults point at the local mailpit sink; override for a real relay.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USERNAME
+      - SMTP_PASSWORD
+      - SMTP_TLS_MODE=${SMTP_TLS_MODE:-ignore}
+      - SMTP_ALLOW_SELF_SIGNED=true
+      - SES_ACCESS_KEY
+      - SES_SECRET_KEY
+      - SES_REGION
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  mail-worker:
+    image: opensrcs/mail-worker
+    container_name: mail-worker
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      mail:
+        condition: service_started
+      redpanda:
+        condition: service_started
+      account:
+        condition: service_started
+    ports:
+      - 4022:4022
+    environment:
+      - PORT=4022
+      - SECRET=secret
+      - SERVICE_ID=mail-worker-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - MAIL_URL=http://club.local:4021
+      - KVS_URL=http://club.local:8094
+      - STORAGE_CONFIG=${STORAGE_CONFIG}
+      - QUEUE_CONFIG=${QUEUE_CONFIG}
+      - QUEUE_REGION=cockroach
+      - WORKSPACE_URL=http://club.local:8087
+      - COMMUNICATION_TOPIC=clubgun
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  notification:
+    image: opensrcs/notification
+    container_name: notification
+    extra_hosts:
+      - 'club.local:host-gateway'
+    ports:
+      - 8091:8091
+    environment:
+      - PORT=8091
+      - SOURCE=club
+      - AUTH_TOKEN=secret
+      # Web-push VAPID pair. Generate with: npx web-push generate-vapid-keys
+      - PUSH_PUBLIC_KEY
+      - PUSH_PRIVATE_KEY
+      - PUSH_SUBJECT=${PUSH_SUBJECT:-mailto:admin@club.local}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  # ── Tier 2: credential-gated, profile-guarded ────────────────────────────
+  gmail:
+    image: opensrcs/gmail
+    container_name: gmail
+    profiles: ['google']
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      account:
+        condition: service_started
+    ports:
+      - 8093:8093
+    environment:
+      - PORT=8093
+      - SECRET=secret
+      - SERVICE_ID=gmail-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - KVS_URL=http://club.local:8094
+      - STORAGE_CONFIG=${STORAGE_CONFIG}
+      - QUEUE_CONFIG=${QUEUE_CONFIG}
+      - QUEUE_REGION=cockroach
+      - VERSION=v2
+      - COMMUNICATION_TOPIC=clubgun
+      # REQUIRED. A JSON blob of the Google OAuth client, note the exact
+      # non-uppercase name - the service reads process.env['Credentials'].
+      - Credentials=${GMAIL_CREDENTIALS:-}
+      - WATCH_TOPIC_NAME=${GMAIL_WATCH_TOPIC_NAME:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  calendar:
+    image: opensrcs/calendar
+    container_name: calendar
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      account:
+        condition: service_started
+    ports:
+      - 8095:8095
+    environment:
+      - PORT=8095
+      - SECRET=secret
+      - SERVICE_ID=calendar-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - KVS_URL=http://club.local:8094
+      - WATCH_URL=${CALENDAR_WATCH_URL:-}
+      - Credentials=${GMAIL_CREDENTIALS:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  calendar-mailer:
+    image: opensrcs/calendar-mailer
+    container_name: calendar-mailer
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      mailpit:
+        condition: service_started
+    environment:
+      - SECRET=secret
+      - ACCOUNTS_URL=http://club.local:3000
+      - QUEUE_CONFIG=${QUEUE_CONFIG}
+      - QUEUE_REGION=cockroach
+      - SMTP_URL=${SMTP_URL:-smtp://mailpit:1025}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  github:
+    image: opensrcs/github
+    container_name: github
+    profiles: ['github']
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      account:
+        condition: service_started
+      collaborator:
+        condition: service_started
+    ports:
+      - 3500:3500
+    volumes:
+      - ./branding.json:/var/cfg/branding.json
+    environment:
+      - PORT=3500
+      - SERVER_SECRET=secret
+      - SERVICE_ID=github-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - FRONT_URL=http://club.local:8087
+      - COLLABORATOR_URL=ws://club.local:3078
+      - BRANDING_PATH=/var/cfg/branding.json
+      # All REQUIRED - the service throws without them.
+      - APP_ID=${GITHUB_APP_ID:-}
+      - CLIENT_ID=${GITHUB_APP_CLIENT_ID:-}
+      - CLIENT_SECRET=${GITHUB_APP_CLIENT_SECRET:-}
+      - PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - WEBHOOK_SECRET=${GITHUB_APP_WEBHOOK_SECRET:-}
+      - BOT_NAME=${GITHUB_BOT_NAME:-}
+      - ENTERPRISE_HOSTNAME=${GITHUB_ENTERPRISE_HOSTNAME:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  telegram-bot:
+    image: opensrcs/telegram-bot
+    container_name: telegram-bot
+    profiles: ['telegram']
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      cockroach:
+        condition: service_started
+      account:
+        condition: service_started
+    ports:
+      - 4020:4020
+    environment:
+      - PORT=4020
+      - BOT_PORT=8443
+      - SECRET=secret
+      - SERVICE_ID=telegram-bot-service
+      - ACCOUNTS_URL=http://club.local:3000
+      - DB_URL=${DB_CR_URL}
+      - STORAGE_CONFIG=${STORAGE_CONFIG}
+      - QUEUE_CONFIG=${QUEUE_CONFIG}
+      - QUEUE_REGION=cockroach
+      - APP=club
+      - DOMAIN=${TELEGRAM_BOT_DOMAIN:-club.local}
+      - BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  translate:
+    image: opensrcs/translate
+    container_name: translate
+    profiles: ['ai']
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      redpanda:
+        condition: service_started
+      account:
+        condition: service_started
+    environment:
+      - SECRET=secret
+      - SERVICE_ID=translate
+      - ACCOUNTS_URL=http://club.local:3000
+      - CLUBLAKE_URL=http://club.local:8096
+      - QUEUE_CONFIG=${QUEUE_CONFIG}
+      - QUEUE_REGION=cockroach
+      # REQUIRED - no default, the service throws without it.
+      - OPENAI_API_KEY
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_BASE_URL
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    restart: unless-stopped
+
+  # The Rust agent. Config comes from a baked-in src/config.yml; every leaf is
+  # overridable with an AGENT_ prefix and "__" for nesting.
+  club-ai-agent:
+    image: opensrcs/club-ai-agent
+    container_name: club-ai-agent
+    profiles: ['ai']
+    extra_hosts:
+      - 'club.local:host-gateway'
+    depends_on:
+      front:
+        condition: service_started
+    environment:
+      - AGENT_MODEL
+      - AGENT_PROVIDER
+      - AGENT_PROVIDER_API_KEY
+      - AGENT_VOYAGEAI_API_KEY
+      - AGENT_VOYAGEAI_MODEL
+      - AGENT_CLUB__BASE_URL=${AGENT_CLUB__BASE_URL:-http://club.local:8087}
+      - AGENT_AGENT_MODE__EMAIL
+      - AGENT_AGENT_MODE__PASSWORD
+      - AGENT_WEB_SEARCH__API_KEY
+    restart: unless-stopped
+
+  # ── Base-stack services that need extra wiring once the above exist ──────
+  # Sign-in providers live in the account service (pods/authProviders). The base
+  # compose never passes them, so social login is silently unavailable.
+  account:
+    environment:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+      - GITHUB_DISPLAY_NAME
+      - OPENID_CLIENT_ID
+      - OPENID_CLIENT_SECRET
+      - OPENID_ISSUER
+      - OPENID_DISPLAY_NAME
+      - MAIL_URL=http://club.local:4021
+
+  # Point the client at the services this overlay just switched on.
+  front:
+    environment:
+      - AI_URL=http://club.local:4010
+      - LOVE_ENDPOINT=http://club.local:8097
+      - LIVEKIT_WS=${LIVEKIT_WS:-ws://club.local:7880}
+      - ANALYTICS_COLLECTOR_URL=http://club.local:4017
+      - TELEGRAM_BOT_URL
+      - GITHUB_APP=${GITHUB_BOT_NAME:-}
+      - GITHUB_CLIENTID=${GITHUB_APP_CLIENT_ID:-}
+      - PUSH_PUBLIC_KEY
+      - PRESENCE_URL=ws://club.local:8099/ws
+      # The base compose disables these; with mail + translate wired they work.
+      - DISABLED_FEATURES=${DISABLED_FEATURES:-auto-translate}
+
+  # ai-bot answers on 4010 and love needs to be reachable from the transactor.
+  transactor_cockroach:
+    environment:
+      - AI_BOT_URL=http://club.local:4010
+      - MAIL_URL=http://club.local:4021
+
+  workspace_cockroach:
+    environment:
+      - MAIL_URL=http://club.local:4021
+
+volumes:
+  mongodb:

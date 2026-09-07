@@ -305,6 +305,38 @@
     },
     {
       "commandKind": "global",
+      "name": "docker:native",
+      "summary": "Build the Rust + Go service images",
+      "description": "Build the images Rush does not build: clubkvs, clublake, clubpulse, clubgun, clubgram, club-ai-agent (Rust) and stream (Go). Pass names to build a subset. Required before docker:up - compose references these images by name.",
+      "safeForSimultaneousRushProcesses": true,
+      "shellCommand": "./common/scripts/docker_native.sh"
+    },
+    {
+      "commandKind": "global",
+      "name": "docker:full",
+      "summary": "Build every image, TypeScript + Rust + Go",
+      "description": "Build the default image set plus the integration services (gmail, calendar, github, telegram-bot, notification, translate) and the native Rust/Go services. This is the complete set docker:up:full needs.",
+      "safeForSimultaneousRushProcesses": true,
+      "shellCommand": "./common/scripts/docker.sh --full && ./common/scripts/docker_native.sh"
+    },
+    {
+      "commandKind": "global",
+      "name": "docker:up:full",
+      "summary": "Up the complete stack, every service",
+      "description": "Start base + ext + full overlays: core stack, billing/payment, and the optional services (ai-bot, love, mail, mail-worker, notification) with local mongodb/mailpit/livekit backing them. Credential-gated services stay down until you add a profile: --profile google|github|telegram|ai.",
+      "safeForSimultaneousRushProcesses": true,
+      "shellCommand": "cd ./dev && docker compose -f docker-compose.yaml -f docker-compose.ext.yaml -f docker-compose.full.yaml up -d --force-recreate"
+    },
+    {
+      "commandKind": "global",
+      "name": "docker:down",
+      "summary": "Stop the full stack",
+      "description": "Stop and remove containers from all compose overlays, leaving volumes intact.",
+      "safeForSimultaneousRushProcesses": true,
+      "shellCommand": "cd ./dev && docker compose -f docker-compose.yaml -f docker-compose.ext.yaml -f docker-compose.full.yaml down --remove-orphans"
+    },
+    {
+      "commandKind": "global",
       "name": "docker:up:pg",
       "summary": "Up development stack with PostgreSQL",
       "description": "Start dev docker compose with PostgreSQL override (docker-compose.yaml + docker-compose.pg.yaml, profile=postgres)",

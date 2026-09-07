@@ -2205,11 +2205,6 @@
       "shouldPublish": false
     },
     {
-      "packageName": "@opensrcs/pod-telegram",
-      "projectFolder": "services/telegram/pod-telegram",
-      "shouldPublish": false
-    },
-    {
       "packageName": "@opensrcs/pod-gmail",
       "projectFolder": "services/gmail/pod-gmail",
       "shouldPublish": false

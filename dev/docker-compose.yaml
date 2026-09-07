@@ -89,7 +89,10 @@ services:
       - 19092:19092
       - 19644:9644
     healthcheck:
-      test: ['CMD', 'rpk', 'cluster', 'info', '-X', 'user=superuser', '-X', 'pass=secretpassword']
+      # No SASL is configured in --mode dev-container, so passing credentials
+      # makes rpk fail with ILLEGAL_SASL_STATE and the container is marked
+      # unhealthy forever. Query the cluster unauthenticated instead.
+      test: ['CMD', 'rpk', 'cluster', 'info']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -353,7 +356,7 @@ services:
     ports:
       - 4004:4004
     environment:
-      - STATS_URL=http://club.local:4901
+      - STATS_URL=http://club.local:4900
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
   fulltext_cockroach:
     image: opensrcs/fulltext
