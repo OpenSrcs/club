@@ -1,9 +1,22 @@
+<div align="center">
+
+<picture>
+  <!-- logo-light.svg is white ink, for dark backgrounds; logo-dark.svg is black ink, for light ones. -->
+  <source media="(prefers-color-scheme: dark)" srcset="plugins/login-resources/img/logo-light.svg">
+  <img src="plugins/login-resources/img/logo-dark.svg" alt="OpenSrcs Club logo" width="96" height="96">
+</picture>
+
 # OpenSrcs Club
 
+[![CI](https://img.shields.io/github/actions/workflow/status/opensrcs/club/main.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/opensrcs/club/actions/workflows/main.yml)
+[![GitHub License](https://img.shields.io/github/license/opensrcs/club?style=for-the-badge)](./LICENSE)
+<!-- TODO: replace REPLACE_WITH_INVITE with the real invite code, e.g. https://discord.gg/abc123 -->
+[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/REPLACE_WITH_INVITE)
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/opensrcs?style=for-the-badge)](https://x.com/opensrcs)
-![GitHub License](https://img.shields.io/github/license/opensrcs/club?style=for-the-badge)
 
 ⭐️ Your star shines on us. Star us on GitHub!
+
+</div>
 
 ## About
 
@@ -31,13 +44,13 @@ For detailed information about changes, improvements, and bug fixes in each vers
 The OpenSrcs Club uses two types of version tags to distinguish between production-ready and development releases:
 
 - **Production Versions (`v*`)** - Stable releases for end users
-  - Example: `v0.7.310`, `v0.7.307`, `v0.6.501`
+  - Example: `v0.1.110`, `v0.1.397`, `v0.1.501`
   - These versions are recommended for production deployments
   - Suitable for self-hosted installations
   - Published with release notes on [GitHub Releases](https://github.com/opensrcs/club/releases)
 
 - **Development Versions (`s*`)** - Pre-release builds for developers
-  - Example: `s0.7.313`, `s0.7.292`, `s0.7.288`
+  - Example: `s0.2.313`, `s0.2.777`, `s0.2.989`
   - Used for development and testing purposes
   - May contain experimental features or bug fixes
   - Not recommended for production use
@@ -378,4 +391,4 @@ When starting the application (`rush docker:up`), some network ports in Windows 
 1. Find what's using that port
 2. Update the new address in the corresponding service configuration
 
-<sub><sup>&copy; 2025 <a href="https://club.opensrcs.org">OpenSrcs Inc</a>.</sup></sub>
+<sub><sup>&copy; 2026 <a href="https://club.opensrcs.org">OpenSrcs Inc</a>.</sup></sub>
