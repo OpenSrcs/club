@@ -302,7 +302,7 @@ jobs:
           ./profile-generate.sh
       - name: Upload profiling results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: profiling
           path: ./tests/profiles
@@ -315,7 +315,7 @@ jobs:
           docker ps -a --format '{{.Names}}' | xargs -I {} sh -c 'docker logs {} > {}_logs.log 2>&1'
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results
           path: ./tests/sanity/playwright-report/
@@ -337,7 +337,7 @@ jobs:
       #     allure_history: allure-history
       # - name: Upload allure test results
       #   if: always()
-      #   uses: actions/upload-artifact@v6
+      #   uses: actions/upload-artifact@v7
       #   with:
       #     name: allure-report
       #     path: ./allure-report/
@@ -350,7 +350,7 @@ jobs:
       #     PUBLISH_DIR: allure-history
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docker-logs
           path: ./tests/sanity/logs
@@ -434,7 +434,7 @@ jobs:
           ./profile-generate.sh
       - name: Upload profiling results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: profiling-pg
           path: ./tests/profiles
@@ -447,13 +447,13 @@ jobs:
           docker ps -a --format '{{.Names}}' | xargs -I {} sh -c 'docker logs {} > {}_logs.log 2>&1'
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results-pg
           path: ./tests/sanity/playwright-report/
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docker-logs-pg
           path: ./tests/sanity/logs
@@ -536,19 +536,19 @@ jobs:
           docker ps -a --format '{{.Names}}' | xargs -I {} sh -c 'docker logs {} > {}_logs.log 2>&1'
       - name: Upload API test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results-api
           path: ./ws-tests/api-tests/playwright-report/
       - name: Upload UI test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results-ws
           path: ./ws-tests/sanity/playwright-report/
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docker-logs-ws
           path: ./ws-tests/sanity/logs
@@ -737,22 +737,22 @@ jobs:
           source-dir: desktop-package/${{ env.PublishTempFolder}}
           destination-dir: ./
       - name: Upload MacOS
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: club-MacOS-x64
           path: ./desktop-package/deploy/club-macos-*-x64.dmg
       - name: Upload MacOS arm64
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: club-MacOS-arm64
           path: ./desktop-package/deploy/club-macos-*-arm64.dmg
       - name: Upload Windows
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: club-Windows
           path: ./desktop-package/deploy/club-windows-*.zip
       - name: Upload Linux
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: club-Linux
           path: ./desktop-package/deploy/club-linux-*.zip
